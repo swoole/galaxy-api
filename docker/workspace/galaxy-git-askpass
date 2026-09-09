@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+
+case "${1:-}" in
+  *sername*) printf '%s\n' "${GALAXY_GIT_USERNAME:-oauth2}" ;;
+  *)
+    if [ ! -r /run/secrets/git-token ]; then
+      exit 1
+    fi
+    exec cat /run/secrets/git-token
+    ;;
+esac

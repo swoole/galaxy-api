@@ -1,0 +1,8 @@
+# Local configuration and generated runtime data must never enter image layers.
+.env
+.git/
+runtime/
+vendor/
+
+# The legacy asserts tree contained obsolete deployment assets and credentials.
+asserts/

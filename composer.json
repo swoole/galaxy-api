@@ -1,0 +1,111 @@
+{
+    "name": "swoole/galaxy-api",
+    "type": "project",
+    "keywords": [
+        "php",
+        "swoole",
+        "hyperf",
+        "codegalaxy",
+        "devops",
+        "container"
+    ],
+    "description": "Backend for the Swoole CodeGalaxy project",
+    "license": "Apache-2.0",
+    "require": {
+        "php": "^8.4",
+        "96qbhy/hyperf-auth": "^3.1",
+        "alibabacloud/cas-20200407": "^3.3",
+        "eftec/bladeone": "^4.5",
+        "flex/gitea": "^1.0",
+        "hashids/hashids": "^5.0",
+        "hyperf/async-queue": "^3.2",
+        "hyperf/cache": "^3.2",
+        "hyperf/command": "^3.2",
+        "hyperf/config": "^3.2",
+        "hyperf/constants": "^3.2",
+        "hyperf/database": "^3.2",
+        "hyperf/db-connection": "^3.2",
+        "hyperf/filesystem": "^3.2",
+        "hyperf/framework": "^3.2",
+        "hyperf/guzzle": "^3.2",
+        "hyperf/http-server": "^3.2",
+        "hyperf/logger": "^3.2",
+        "hyperf/memory": "^3.2",
+        "hyperf/paginator": "^3.2",
+        "hyperf/process": "^3.2",
+        "hyperf/redis": "^3.2",
+        "hyperf/signal": "^3.2",
+        "hyperf/snowflake": "^3.2",
+        "hyperf/validation": "^3.2",
+        "hyperf/websocket-server": "^3.2",
+        "jetbrains/phpstorm-attributes": "^1.0",
+        "league/flysystem-aws-s3-v3": "^3.0",
+        "iidestiny/flysystem-oss": "^4.0",
+        "m4tthumphrey/php-gitlab-api": "^12.1",
+        "overtrue/flysystem-cos": "^5.2",
+        "overtrue/pinyin": "^6.0",
+        "qcloud/cos-sdk-v5": "^2.5",
+        "ramsey/uuid": "^4.2",
+        "symfony/process": "^8.1",
+        "symfony/yaml": "^8.1",
+        "tencentcloud/tencentcloud-sdk-php": "^3.0",
+        "w7corp/easywechat": "^6.19",
+        "yurunsoft/phpmailer-swoole": "~1.0"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.95",
+        "hyperf/devtool": "^3.2",
+        "hyperf/ide-helper": "^3.2",
+        "hyperf/testing": "^3.2",
+        "hyperf/watcher": "^3.2",
+        "mockery/mockery": "^1.6",
+        "phpstan/phpstan": "^2.2",
+        "phpunit/phpunit": "^11.5",
+        "swoole/ide-helper": "^6.0",
+        "symfony/var-dumper": "^8.1"
+    },
+    "suggest": {
+        "ext-openssl": "Required to use HTTPS.",
+        "ext-json": "Required to use JSON.",
+        "ext-pdo": "Required to use MySQL Client.",
+        "ext-pdo_mysql": "Required to use MySQL Client.",
+        "ext-redis": "Required to use Redis Client."
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        },
+        "files": ["app/Support/Helper.php"]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "HyperfTest\\": "./test/"
+        },
+        "files": []
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true,
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
+    },
+    "extra": [],
+    "scripts": {
+        "post-root-package-install": [
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
+        ],
+        "post-autoload-dump": [
+            "rm -rf runtime/container"
+        ],
+        "test": "phpunit -c phpunit.xml --colors=always",
+        "cs-fix": "php-cs-fixer fix $1",
+        "analyse": "phpstan analyse --memory-limit 300M -l 0 -c phpstan.neon ./app ./config",
+        "start": [
+            "Composer\\Config::disableProcessTimeout",
+            "php ./bin/hyperf.php start"
+        ]
+    }
+}

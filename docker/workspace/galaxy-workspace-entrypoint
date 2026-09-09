@@ -1,0 +1,15 @@
+#!/bin/sh
+
+set -eu
+
+# A new Docker named volume is owned by root even when /workspace in the image
+# belongs to the development user. Prepare it once, then never run user code as
+# root.
+install -d -o openvscode-server -g openvscode-server \
+    /workspace \
+    /workspace/repository \
+    /workspace/.galaxy-home \
+    /workspace/.galaxy-home/.config
+chown openvscode-server:openvscode-server /workspace
+
+exec sudo -E -u openvscode-server -- "$@"

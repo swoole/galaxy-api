@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta charset="utf-8" />
+    <style>
+        code {
+            color: #5e6d82;
+            background-color: #e6effb;
+            margin: 0 4px;
+            display: inline-block;
+            padding: 1px 5px;
+            border-radius: 3px;
+            height: 1.5em;
+            line-height: 1.5em;
+        }
+        .text-danger {
+            color: #f56c6c;
+        }
+        .text-success {
+            color:#67C23A;
+        }
+    </style>
+</head>
+<body>
+<div>
+    <div style="font-weight: 600;">
+        有一个新的组织认证待审核：
+    </div>
+
+    <div style="padding-left: 2em;">
+        <p>
+            组织ID：{{org.id}}<br>
+            组织名称：{{org.title}}<br>
+            组织创建时间：{{org.created_at}}
+        </p>
+
+        <p>
+            申请记录ID：{{apply.id}}<br>
+            企业名称：{{company.title}}<br>
+            所在城市：{{company.city}}<br>
+            团队规模：{{company.team_size}}<br>
+            联系人姓名：{{company.realname}}<br>
+            手机号：{{company.phone}}<br>
+            所在部门：{{company.department}}<br>
+            职位：{{company.position}}<br>
+            申请时间：{{apply.created_at}}
+        </p>
+
+        <p>
+            申请人UID：{{user.id}}<br>申请人用户名：{{user.username}}<br>
+            申请人邮箱：{{user.email}}<br>
+            申请人手机号：{{user.phone}}
+        </p>
+    </div>
+
+    <div>
+        <p class="text-success">审核通过请执行：</p>
+        <p>
+            <code>php bin/hyperf.php audit:org-auth -i {{apply.id}} -o {{org.id}} --accept --reason=""</code>
+        </p>
+    </div>
+
+    <div>
+        <p class="text-danger">审核拒绝请执行：</p>
+        <p>
+            <code>php bin/hyperf.php audit:org-auth -i {{apply.id}} -o {{org.id}} --reject --reason=""</code>
+        </p>
+    </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,25 @@
+!.gitkeep
+.buildpath
+.settings/
+.vscode/
+.project
+*.patch
+.idea/
+.git/
+runtime/
+vendor/
+.phpintel/
+.env
+.DS_Store
+.phpunit*
+*.cache
+/redis
+# 调试文件
+app/Controller/TestController.php
+
+# 自动生成的数据导出文件
+export-default-pipeline.json
+
+# 自动生成SSL证书的目录
+storage/letsencrypt
+/storage/keys/
