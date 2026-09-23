@@ -13,7 +13,7 @@ use Throwable;
 
 class SwarmPrometheusService
 {
-    private const DEFAULT_IMAGE = 'prom/prometheus:v3.2.1';
+    private const DEFAULT_IMAGE = 'registry.cn-shanghai.aliyuncs.com/swoole-public/prometheus:v3.2.1';
     private const DEFAULT_SERVICE = 'galaxy-prometheus';
 
     public function __construct(
@@ -176,7 +176,7 @@ class SwarmPrometheusService
             'Labels' => $labels,
             'TaskTemplate' => [
                 'ContainerSpec' => [
-                    'Image' => $this->imageMappings->resolve($cluster, 'prom/node-exporter:v1.8.2'),
+                    'Image' => $this->imageMappings->resolve($cluster, 'registry.cn-shanghai.aliyuncs.com/swoole-public/node-exporter:v1.8.2'),
                     'Args' => [
                         '--path.procfs=/host/proc',
                         '--path.sysfs=/host/sys',
@@ -203,7 +203,7 @@ class SwarmPrometheusService
             'Labels' => $labels,
             'TaskTemplate' => [
                 'ContainerSpec' => [
-                    'Image' => $this->imageMappings->resolve($cluster, 'gcr.io/cadvisor/cadvisor:v0.49.1'),
+                    'Image' => $this->imageMappings->resolve($cluster, 'registry.cn-shanghai.aliyuncs.com/swoole-public/cadvisor:v0.49.1'),
                     'Args' => ['--docker_only=true', '--housekeeping_interval=30s'],
                     'Labels' => $labels,
                     'Mounts' => [

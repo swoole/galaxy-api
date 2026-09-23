@@ -22,9 +22,9 @@ use Throwable;
 
 class SwarmWebGatewayService
 {
-    private const DEFAULT_IMAGE = 'traefik:v3.7';
+    private const DEFAULT_IMAGE = 'registry.cn-shanghai.aliyuncs.com/swoole-public/traefik:v3.7';
     private const DEFAULT_SERVICE = 'galaxy-web-gateway';
-    private const DEFAULT_SOCKET_PROXY_IMAGE = 'tecnativa/docker-socket-proxy:latest';
+    private const DEFAULT_SOCKET_PROXY_IMAGE = 'registry.cn-shanghai.aliyuncs.com/swoole-public/docker-socket-proxy:latest';
     private const DEFAULT_SOCKET_PROXY_SERVICE = 'galaxy-web-gateway-socket-proxy';
     private const DEFAULT_NETWORK = 'galaxy-web';
     private const DEFAULT_CONTROL_NETWORK = 'galaxy-web-control';

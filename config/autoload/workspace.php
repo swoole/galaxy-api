@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 return [
-    'image' => env('WORKSPACE_IMAGE', env('APP_WORKSPACE_IMAGE', 'codegalaxy/workspace:2026.07')),
+    'image' => env('WORKSPACE_IMAGE', env('APP_WORKSPACE_IMAGE', 'registry.cn-shanghai.aliyuncs.com/swoole-public/workspace:2026.07')),
     'target_port' => (int) env('WORKSPACE_TARGET_PORT', env('APP_WORKSPACE_TARGET_PORT', 3000)),
     'volume_path' => env('WORKSPACE_VOLUME_PATH', env('APP_WORKSPACE_VOLUME_PATH', '/workspace')),
     'workspace_path' => env('WORKSPACE_PATH', env('APP_WORKSPACE_PATH', '/workspace/repository')),

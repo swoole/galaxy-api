@@ -1,6 +1,6 @@
-FROM node:22-bookworm-slim AS node-runtime
+FROM registry.cn-shanghai.aliyuncs.com/swoole-public/node:22-bookworm-slim AS node-runtime
 
-FROM gitpod/openvscode-server:latest
+FROM registry.cn-shanghai.aliyuncs.com/swoole-public/openvscode-server:latest
 
 USER root
 

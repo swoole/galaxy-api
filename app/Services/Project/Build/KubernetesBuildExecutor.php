@@ -316,7 +316,7 @@ SH;
                         'restartPolicy' => 'Never',
                         'initContainers' => [[
                             'name' => 'source',
-                            'image' => (string) config('buildkit.git_image', 'alpine/git:latest'),
+                            'image' => (string) config('buildkit.git_image', 'registry.cn-shanghai.aliyuncs.com/swoole-public/git:latest'),
                             'imagePullPolicy' => 'IfNotPresent',
                             'command' => ['/bin/sh', '-c'],
                             'args' => [$cloneScript],

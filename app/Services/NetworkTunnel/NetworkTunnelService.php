@@ -48,8 +48,8 @@ final class NetworkTunnelService
                 'status' => (int) $cluster->status,
             ])->all();
         return ['servers' => $servers, 'clusters' => $clusters, 'defaults' => [
-            'frps_image' => 'fatedier/frps:v0.69.0',
-            'frpc_image' => 'fatedier/frpc:v0.69.0',
+            'frps_image' => 'registry.cn-shanghai.aliyuncs.com/swoole-public/frps:v0.69.0',
+            'frpc_image' => 'registry.cn-shanghai.aliyuncs.com/swoole-public/frpc:v0.69.0',
             'namespace' => 'galaxy-frp',
             'bind_port' => 7000,
             'dashboard_port' => 7500,
@@ -89,7 +89,7 @@ final class NetworkTunnelService
                 : 'manual',
             'cluster_id' => $clusterId,
             'namespace' => trim((string) ($input['namespace'] ?? '')) ?: 'galaxy-frp',
-            'image' => trim((string) ($input['image'] ?? '')) ?: 'fatedier/frps:v0.69.0',
+            'image' => trim((string) ($input['image'] ?? '')) ?: 'registry.cn-shanghai.aliyuncs.com/swoole-public/frps:v0.69.0',
             'advertise_host' => trim((string) $input['advertise_host']),
             'bind_port' => (int) ($input['bind_port'] ?? 7000),
             'vhost_http_port' => (int) ($input['vhost_http_port'] ?? 0),
@@ -168,7 +168,7 @@ final class NetworkTunnelService
         $server->deployment_mode = $mode;
         $server->cluster_id = $clusterId;
         $server->namespace = $newNamespace;
-        $server->image = trim((string) ($input['image'] ?? '')) ?: 'fatedier/frps:v0.69.0';
+        $server->image = trim((string) ($input['image'] ?? '')) ?: 'registry.cn-shanghai.aliyuncs.com/swoole-public/frps:v0.69.0';
         $server->advertise_host = trim((string) $input['advertise_host']);
         $server->bind_port = $newBindPort;
         $server->vhost_http_port = $newHttpPort;
@@ -224,7 +224,7 @@ final class NetworkTunnelService
                 : 'manual',
             'cluster_id' => $clusterId,
             'namespace' => trim((string) ($input['namespace'] ?? '')) ?: 'galaxy-frp',
-            'image' => trim((string) ($input['image'] ?? '')) ?: 'fatedier/frpc:v0.69.0',
+            'image' => trim((string) ($input['image'] ?? '')) ?: 'registry.cn-shanghai.aliyuncs.com/swoole-public/frpc:v0.69.0',
             'frp_user' => $this->slug((string) ($input['frp_user'] ?? '')),
             'transport_pool_count' => max(1, (int) ($input['transport_pool_count'] ?? 5)),
             'runtime_status' => $mode === 'external' ? 'external' : 'not_deployed',
@@ -256,7 +256,7 @@ final class NetworkTunnelService
         $client->deployment_mode = $mode;
         $client->cluster_id = $clusterId;
         $client->namespace = trim((string) ($input['namespace'] ?? '')) ?: 'galaxy-frp';
-        $client->image = trim((string) ($input['image'] ?? '')) ?: 'fatedier/frpc:v0.69.0';
+        $client->image = trim((string) ($input['image'] ?? '')) ?: 'registry.cn-shanghai.aliyuncs.com/swoole-public/frpc:v0.69.0';
         $client->frp_user = $this->slug((string) ($input['frp_user'] ?? ''));
         $existingPoolCount = (int) $client->transport_pool_count > 0
             ? (int) $client->transport_pool_count
@@ -436,7 +436,7 @@ final class NetworkTunnelService
                     'management_mode' => 'automatic',
                     'cluster_id' => (int) $destinationCluster->id,
                     'namespace' => 'galaxy-frp',
-                    'image' => 'fatedier/frps:v0.69.0',
+                    'image' => 'registry.cn-shanghai.aliyuncs.com/swoole-public/frps:v0.69.0',
                     'advertise_host' => $this->automaticAdvertiseHost($destinationCluster),
                     'bind_port' => (int) ($input['frps_bind_port'] ?? 7000),
                     'dashboard_port' => (int) ($input['frps_dashboard_port'] ?? 7500),
@@ -466,7 +466,7 @@ final class NetworkTunnelService
                     'management_mode' => 'automatic',
                     'cluster_id' => (int) $sourceCluster->id,
                     'namespace' => 'galaxy-frp',
-                    'image' => 'fatedier/frpc:v0.69.0',
+                    'image' => 'registry.cn-shanghai.aliyuncs.com/swoole-public/frpc:v0.69.0',
                     'frp_user' => sprintf(
                         'c%d-to-s%d',
                         (int) $sourceCluster->id,

@@ -224,7 +224,7 @@ final class KubernetesAppInstaller
             $namespace = (string) $installation->namespace;
             $name = (string) $installation->release_name;
             $labels = $this->labels($installation);
-            $image = $this->imageMappings->resolve($cluster, (string) ($spec['image'] ?? 'rancher/rancher:v2.14.2'));
+            $image = $this->imageMappings->resolve($cluster, (string) ($spec['image'] ?? 'registry.cn-shanghai.aliyuncs.com/swoole-public/rancher:v2.14.2'));
 
             $this->report($jobId, 'validate', 'Kubernetes 集群连接与安装参数校验完成');
             $this->apply($credential, '/api/v1/namespaces/' . rawurlencode($namespace), [
@@ -392,7 +392,7 @@ final class KubernetesAppInstaller
             ));
             $chartValues = [
                 'global' => [
-                    'imageRegistry' => (string) ($helm['image_registry'] ?? 'docker.io'),
+                    'imageRegistry' => (string) ($helm['image_registry'] ?? 'registry.cn-shanghai.aliyuncs.com/swoole-public'),
                     'tag' => (string) ($helm['app_version'] ?? $tpl->version),
                 ],
                 'multicluster' => ['role' => 'host'],

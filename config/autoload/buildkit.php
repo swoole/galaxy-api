@@ -3,9 +3,9 @@
 declare(strict_types=1);
 
 return [
-    'image' => env('BUILDKIT_IMAGE', 'moby/buildkit:v0.31.1-rootless'),
-    'kubernetes_image' => env('BUILDKIT_KUBERNETES_IMAGE', 'moby/buildkit:v0.31.1'),
-    'git_image' => env('BUILDKIT_GIT_IMAGE', 'alpine/git:latest'),
+    'image' => env('BUILDKIT_IMAGE', 'registry.cn-shanghai.aliyuncs.com/swoole-public/buildkit:v0.31.1-rootless'),
+    'kubernetes_image' => env('BUILDKIT_KUBERNETES_IMAGE', 'registry.cn-shanghai.aliyuncs.com/swoole-public/buildkit:v0.31.1'),
+    'git_image' => env('BUILDKIT_GIT_IMAGE', 'registry.cn-shanghai.aliyuncs.com/swoole-public/git:latest'),
     'dockerhub_mirror' => env('BUILDKIT_DOCKERHUB_MIRROR', ''),
     'kubernetes_cache_size' => env('BUILDKIT_KUBERNETES_CACHE_SIZE', '10Gi'),
     'pull_policy' => env('BUILDKIT_PULL_POLICY', 'if-not-present'),

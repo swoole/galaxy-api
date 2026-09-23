@@ -20,14 +20,14 @@ Included baseline tools:
 Build and publish the image to a registry reachable by every Swarm manager:
 
 ```bash
-docker build -t registry.example.com/codegalaxy/workspace:2026.07 docker/workspace
-docker push registry.example.com/codegalaxy/workspace:2026.07
+docker build -t registry.cn-shanghai.aliyuncs.com/swoole-public/workspace:2026.07 docker/workspace
+docker push registry.cn-shanghai.aliyuncs.com/swoole-public/workspace:2026.07
 ```
 
 Configure the API with the published reference:
 
 ```dotenv
-APP_WORKSPACE_IMAGE=registry.example.com/codegalaxy/workspace:2026.07
+APP_WORKSPACE_IMAGE=registry.cn-shanghai.aliyuncs.com/swoole-public/workspace:2026.07
 ```
 
 Hyperf 在 Master 启动时读取该配置。修改 `.env` 后需要完整重启服务；仅发送
@@ -47,7 +47,7 @@ docker build \
   --build-arg CLAUDE_CODE_VERSION=2.1.210 \
   --build-arg CODEX_VERSION=0.144.4 \
   --build-arg CODEBUDDY_CODE_VERSION=2.121.2 \
-  -t registry.example.com/codegalaxy/workspace:2026.07 \
+  -t registry.cn-shanghai.aliyuncs.com/swoole-public/workspace:2026.07 \
   docker/workspace
 ```
 

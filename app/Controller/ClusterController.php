@@ -303,7 +303,7 @@ class ClusterController extends AbstractController
             'image' => 'nullable|string|max:1024',
             'scrape_interval' => 'nullable|integer|min:5|max:300',
             'retention_days' => 'nullable|integer|min:1|max:365',
-        ]), ['image' => 'prom/prometheus:v3.2.1',
+        ]), ['image' => 'registry.cn-shanghai.aliyuncs.com/swoole-public/prometheus:v3.2.1',
             'scrape_interval' => 15, 'retention_days' => 15]);
         return $this->success($this->swarmPrometheusService->deploy(
             (int) Functions::getLoginUser()->getId(), $this->resolveSwarmCluster(), $params

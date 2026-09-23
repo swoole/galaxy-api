@@ -5,7 +5,7 @@
 # @contact  group@hyperf.io
 # @license  https://github.com/hyperf/hyperf/blob/master/LICENSE
 
-FROM golang:1.24-alpine AS ssh-relay-builder
+FROM registry.cn-shanghai.aliyuncs.com/swoole-public/golang:1.24-alpine AS ssh-relay-builder
 
 ENV GOPROXY=https://goproxy.cn,direct
 WORKDIR /src
@@ -14,7 +14,7 @@ RUN go mod download
 COPY ssh-relay/ ./
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/galaxy-ssh-relay .
 
-FROM golang:1.24-alpine AS helm-service-builder
+FROM registry.cn-shanghai.aliyuncs.com/swoole-public/golang:1.24-alpine AS helm-service-builder
 
 ENV GOPROXY=https://goproxy.cn,direct
 WORKDIR /src
@@ -23,7 +23,7 @@ RUN go mod download
 COPY helm-service/ ./
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/galaxy-helm-service .
 
-FROM hyperf/hyperf:8.4-alpine-v3.21-swoole
+FROM registry.cn-shanghai.aliyuncs.com/swoole-public/hyperf:8.4-alpine-v3.21-swoole
 
 ##
 # ---------- env settings ----------

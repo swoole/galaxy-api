@@ -743,8 +743,8 @@ DOCKER;
             'CG_TIMEZONE' => $options['timezone'],
             'CG_RUNTIME_PACKAGES' => implode(' ', $options['runtime_packages']),
         ], $this->osBuildArgs($options));
-        $dockerfile = "# syntax=docker/dockerfile:1.7\nARG CG_NGINX_VERSION\n"
-            . "FROM nginx:\${CG_NGINX_VERSION}-alpine AS runtime\nARG CG_APP_PORT\nARG CG_RUNTIME_PACKAGES=\"\"\n"
+        $dockerfile = "# syntax=registry.cn-shanghai.aliyuncs.com/swoole-public/dockerfile:1.7\nARG CG_NGINX_VERSION\n"
+            . "FROM registry.cn-shanghai.aliyuncs.com/swoole-public/nginx:\${CG_NGINX_VERSION}-alpine AS runtime\nARG CG_APP_PORT\nARG CG_RUNTIME_PACKAGES=\"\"\n"
             . $this->alpineStageArgs() . "\n"
             . $this->alpineInstall('$CG_RUNTIME_PACKAGES') . "\n"
             . "RUN printf '%s\\n' 'server {' \" listen \${CG_APP_PORT};\" ' root /usr/share/nginx/html;' ' index index.html;' ' location / { try_files \$uri \$uri/ /index.html; }' '}' > /etc/nginx/conf.d/default.conf"
@@ -801,8 +801,8 @@ SH;
         $extensionCopy = $options['extensions'] === [] ? ''
             : "COPY --from=builder /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/\n"
                 . "COPY --from=builder /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/\n";
-        $header = "# syntax=docker/dockerfile:1.7\nARG CG_PHP_VERSION\nARG CG_COMPOSER_IMAGE=composer:2\nFROM \${CG_COMPOSER_IMAGE} AS composer\n";
-        $builder = "FROM php:\${CG_PHP_VERSION}-cli-bookworm AS builder\n"
+        $header = "# syntax=registry.cn-shanghai.aliyuncs.com/swoole-public/dockerfile:1.7\nARG CG_PHP_VERSION\nARG CG_COMPOSER_IMAGE=registry.cn-shanghai.aliyuncs.com/swoole-public/composer:2\nFROM \${CG_COMPOSER_IMAGE} AS composer\n";
+        $builder = "FROM registry.cn-shanghai.aliyuncs.com/swoole-public/php:\${CG_PHP_VERSION}-cli-bookworm AS builder\n"
             . "ARG CG_COMPOSER_MIRROR\nARG CG_PHP_EXTENSIONS\nARG CG_APP_DIR\nARG CG_BUILDER_PACKAGES=\"\"\n"
             . $this->debianStageArgs() . "\n"
             . $this->debianInstall(implode(' ', array_unique($builderPackages))) . "\n"
@@ -815,7 +815,7 @@ SH;
             . "COPY . .\nRUN --mount=type=cache,target=/tmp/composer-cache composer install --no-dev --prefer-dist --no-interaction --no-progress --classmap-authoritative\n";
         $server = $options['runtime_server'];
         if ($server === 'frankenphp') {
-            $runtime = "FROM dunglas/frankenphp:php\${CG_PHP_VERSION}-bookworm AS runtime\nARG CG_APP_DIR\nARG CG_APP_PORT\nARG CG_RUNTIME_PACKAGES=\"\"\n"
+            $runtime = "FROM registry.cn-shanghai.aliyuncs.com/swoole-public/frankenphp:php\${CG_PHP_VERSION}-bookworm AS runtime\nARG CG_APP_DIR\nARG CG_APP_PORT\nARG CG_RUNTIME_PACKAGES=\"\"\n"
                 . $this->debianStageArgs() . "\n"
                 . $this->debianInstall(implode(' ', $runtimePackages)) . "\n"
                 . $extensionCopy
@@ -826,7 +826,7 @@ SH;
                 . 'CMD ' . $this->command(['frankenphp', 'run', '--config', '/etc/caddy/Caddyfile'], $options) . "\n";
         } elseif ($server === 'nginx-fpm') {
             $runtimePackages = array_values(array_unique(array_merge(['nginx', 'supervisor'], $runtimePackages)));
-            $runtime = "FROM php:\${CG_PHP_VERSION}-fpm-bookworm AS runtime\nARG CG_APP_DIR\nARG CG_APP_PORT\nARG CG_RUNTIME_PACKAGES=\"\"\n"
+            $runtime = "FROM registry.cn-shanghai.aliyuncs.com/swoole-public/php:\${CG_PHP_VERSION}-fpm-bookworm AS runtime\nARG CG_APP_DIR\nARG CG_APP_PORT\nARG CG_RUNTIME_PACKAGES=\"\"\n"
                 . $this->debianStageArgs() . "\n"
                 . $this->debianInstall(implode(' ', $runtimePackages)) . "\n"
                 . $extensionCopy
@@ -840,7 +840,7 @@ SH;
             $command = (string) $template['framework'] === 'hyperf'
                 ? ['php', 'bin/hyperf.php', 'start']
                 : ['php', 'index.php'];
-            $runtime = "FROM php:\${CG_PHP_VERSION}-cli-bookworm AS runtime\nARG CG_APP_DIR\nARG CG_APP_PORT\nARG CG_RUNTIME_PACKAGES=\"\"\n"
+            $runtime = "FROM registry.cn-shanghai.aliyuncs.com/swoole-public/php:\${CG_PHP_VERSION}-cli-bookworm AS runtime\nARG CG_APP_DIR\nARG CG_APP_PORT\nARG CG_RUNTIME_PACKAGES=\"\"\n"
                 . $this->debianStageArgs() . "\n"
                 . $this->debianInstall(implode(' ', $runtimePackages)) . "\n"
                 . $extensionCopy . "WORKDIR \${CG_APP_DIR}\n"
@@ -860,9 +860,9 @@ SH;
             throw new AppException(422, 'Distroless Runtime 不支持 CGO、额外系统包、命令型健康检查或非 UTC 时区');
         }
         $runtimeImage = match ($variant) {
-            'alpine' => 'alpine:3.22',
-            'debian' => 'debian:bookworm-slim',
-            'distroless' => 'gcr.io/distroless/static-debian12:' . ($options['non_root'] ? 'nonroot' : 'latest'),
+            'alpine' => 'registry.cn-shanghai.aliyuncs.com/swoole-public/alpine:3.22',
+            'debian' => 'registry.cn-shanghai.aliyuncs.com/swoole-public/debian:bookworm-slim',
+            'distroless' => 'registry.cn-shanghai.aliyuncs.com/swoole-public/static-debian12:' . ($options['non_root'] ? 'nonroot' : 'latest'),
         };
         $args = array_merge([
             'CG_GO_VERSION' => $options['runtime_version'],
@@ -895,8 +895,8 @@ SH;
                 : ($options['non_root'] ? "USER app\n" : ''))
             . "EXPOSE \${CG_APP_PORT}\n" . $this->healthcheck($options)
             . 'ENTRYPOINT ' . $this->command([$options['app_dir'] . '/app'], $options) . "\n";
-        $dockerfile = "# syntax=docker/dockerfile:1.7\nARG CG_GO_VERSION\nARG CG_GO_RUNTIME_IMAGE\n"
-            . "FROM golang:\${CG_GO_VERSION}-bookworm AS builder\n"
+        $dockerfile = "# syntax=registry.cn-shanghai.aliyuncs.com/swoole-public/dockerfile:1.7\nARG CG_GO_VERSION\nARG CG_GO_RUNTIME_IMAGE\n"
+            . "FROM registry.cn-shanghai.aliyuncs.com/swoole-public/golang:\${CG_GO_VERSION}-bookworm AS builder\n"
             . "ARG CG_GOPROXY\nARG CGO_ENABLED\nARG CG_GO_BUILD_TAGS\nARG CG_GO_LDFLAGS\nARG CG_GOPRIVATE\nARG CG_GO_TARGET\nARG CG_BUILDER_PACKAGES=\"\"\n"
             . $this->debianStageArgs() . "\n"
             . "ENV GOPROXY=\${CG_GOPROXY} CGO_ENABLED=\${CGO_ENABLED} GOPRIVATE=\${CG_GOPRIVATE}\n"
@@ -937,7 +937,7 @@ SH;
             : [$manager, 'run', $options['start_script']];
         if ($static) {
             $outputDirectory = $framework === 'react' ? 'build' : 'dist';
-            $runtime = "FROM nginx:1.27-alpine AS runtime\nARG CG_APP_DIR\nARG CG_APP_PORT\nARG CG_RUNTIME_PACKAGES=\"\"\n"
+            $runtime = "FROM registry.cn-shanghai.aliyuncs.com/swoole-public/nginx:1.27-alpine AS runtime\nARG CG_APP_DIR\nARG CG_APP_PORT\nARG CG_RUNTIME_PACKAGES=\"\"\n"
                 . $this->alpineStageArgs() . "\n"
                 . $this->alpineInstall('$CG_RUNTIME_PACKAGES') . "\n"
                 . "RUN printf '%s\\n' 'server {' \" listen \${CG_APP_PORT};\" ' root /usr/share/nginx/html;' ' index index.html;' ' location / { try_files \$uri \$uri/ /index.html; }' '}' > /etc/nginx/conf.d/default.conf"
@@ -946,7 +946,7 @@ SH;
                 . $this->healthcheck($options)
                 . 'CMD ' . $this->command(['nginx', '-g', 'daemon off;'], $options) . "\n";
         } else {
-            $runtime = "FROM node:\${CG_NODE_VERSION}-bookworm-slim AS runtime\nARG CG_NODE_PACKAGE_MANAGER\nARG CG_NPM_REGISTRY\nARG CG_APP_DIR\nARG CG_APP_PORT\nARG CG_RUNTIME_PACKAGES=\"\"\n"
+            $runtime = "FROM registry.cn-shanghai.aliyuncs.com/swoole-public/node:\${CG_NODE_VERSION}-bookworm-slim AS runtime\nARG CG_NODE_PACKAGE_MANAGER\nARG CG_NPM_REGISTRY\nARG CG_APP_DIR\nARG CG_APP_PORT\nARG CG_RUNTIME_PACKAGES=\"\"\n"
                 . $this->debianStageArgs() . "\n"
                 . "ENV NODE_ENV=production CG_NODE_PACKAGE_MANAGER=\${CG_NODE_PACKAGE_MANAGER}"
                 . ($usesCorepack ? " COREPACK_HOME=/opt/corepack COREPACK_NPM_REGISTRY=\${CG_NPM_REGISTRY}" : '') . "\n"
@@ -957,7 +957,7 @@ SH;
                 . "EXPOSE \${CG_APP_PORT}\n" . $this->healthcheck($options)
                 . 'CMD ' . $this->command($defaultCommand, $options) . "\n";
         }
-        $dockerfile = "# syntax=docker/dockerfile:1.7\nARG CG_NODE_VERSION\nFROM node:\${CG_NODE_VERSION}-bookworm AS builder\nARG CG_NPM_REGISTRY\nARG CG_NODE_PACKAGE_MANAGER\nARG CG_NODE_BUILD_SCRIPT\nARG CG_APP_DIR\nARG CG_BUILDER_PACKAGES=\"\"\n"
+        $dockerfile = "# syntax=registry.cn-shanghai.aliyuncs.com/swoole-public/dockerfile:1.7\nARG CG_NODE_VERSION\nFROM registry.cn-shanghai.aliyuncs.com/swoole-public/node:\${CG_NODE_VERSION}-bookworm AS builder\nARG CG_NPM_REGISTRY\nARG CG_NODE_PACKAGE_MANAGER\nARG CG_NODE_BUILD_SCRIPT\nARG CG_APP_DIR\nARG CG_BUILDER_PACKAGES=\"\"\n"
             . $this->debianStageArgs() . "\n"
             . ($usesCorepack ? "ENV COREPACK_HOME=/opt/corepack COREPACK_NPM_REGISTRY=\${CG_NPM_REGISTRY}\n" : '')
             . ($options['builder_packages'] === [] ? '' : $this->debianInstall('$CG_BUILDER_PACKAGES') . "\n")
@@ -980,11 +980,11 @@ SH;
         $defaultCommand = $options['runtime_server'] === 'uvicorn'
             ? ['uvicorn', $options['entry_module'], '--host', '0.0.0.0', '--port', (string) $options['port'], '--workers', (string) $options['workers']]
             : ['gunicorn', '--bind', '0.0.0.0:' . $options['port'], '--workers', (string) $options['workers'], $options['entry_module']];
-        $dockerfile = "# syntax=docker/dockerfile:1.7\nARG CG_PYTHON_VERSION\nFROM python:\${CG_PYTHON_VERSION}-slim-bookworm AS builder\nARG CG_PIP_INDEX_URL\nARG CG_PYTHON_PACKAGE_MANAGER\nARG CG_APP_DIR\nARG CG_BUILDER_PACKAGES=\"\"\n"
+        $dockerfile = "# syntax=registry.cn-shanghai.aliyuncs.com/swoole-public/dockerfile:1.7\nARG CG_PYTHON_VERSION\nFROM registry.cn-shanghai.aliyuncs.com/swoole-public/python:\${CG_PYTHON_VERSION}-slim-bookworm AS builder\nARG CG_PIP_INDEX_URL\nARG CG_PYTHON_PACKAGE_MANAGER\nARG CG_APP_DIR\nARG CG_BUILDER_PACKAGES=\"\"\n"
             . $this->debianStageArgs() . "\n"
             . "ENV PIP_INDEX_URL=\${CG_PIP_INDEX_URL} UV_DEFAULT_INDEX=\${CG_PIP_INDEX_URL} PIP_DISABLE_PIP_VERSION_CHECK=1 VIRTUAL_ENV=/opt/venv PATH=/opt/venv/bin:\$PATH\n"
             . ($options['builder_packages'] === [] ? '' : $this->debianInstall('$CG_BUILDER_PACKAGES') . "\n")
-            . "WORKDIR \${CG_APP_DIR}\nCOPY requirements*.txt pyproject.toml* poetry.lock* uv.lock* ./\nCOPY . .\nRUN --mount=type=cache,target=/root/.cache/pip --mount=type=cache,target=/root/.cache/uv --mount=type=cache,target=/root/.cache/pypoetry python -m venv /opt/venv && case \"\$CG_PYTHON_PACKAGE_MANAGER\" in pip) if [ -f requirements.txt ]; then pip install -r requirements.txt; else pip install .; fi;; uv) pip install uv && if [ -f requirements.txt ]; then uv pip install --python /opt/venv/bin/python -r requirements.txt; else uv pip install --python /opt/venv/bin/python .; fi;; poetry) pip install poetry && poetry config virtualenvs.create false && if [ \"\$CG_PIP_INDEX_URL\" != \"https://pypi.org/simple\" ]; then poetry source add --priority=primary galaxy \"\$CG_PIP_INDEX_URL\"; fi && poetry install --only main --no-interaction --no-root;; esac\nFROM python:\${CG_PYTHON_VERSION}-slim-bookworm AS runtime\nARG CG_APP_DIR\nARG CG_APP_PORT\nARG CG_RUNTIME_PACKAGES=\"\"\n"
+            . "WORKDIR \${CG_APP_DIR}\nCOPY requirements*.txt pyproject.toml* poetry.lock* uv.lock* ./\nCOPY . .\nRUN --mount=type=cache,target=/root/.cache/pip --mount=type=cache,target=/root/.cache/uv --mount=type=cache,target=/root/.cache/pypoetry python -m venv /opt/venv && case \"\$CG_PYTHON_PACKAGE_MANAGER\" in pip) if [ -f requirements.txt ]; then pip install -r requirements.txt; else pip install .; fi;; uv) pip install uv && if [ -f requirements.txt ]; then uv pip install --python /opt/venv/bin/python -r requirements.txt; else uv pip install --python /opt/venv/bin/python .; fi;; poetry) pip install poetry && poetry config virtualenvs.create false && if [ \"\$CG_PIP_INDEX_URL\" != \"https://pypi.org/simple\" ]; then poetry source add --priority=primary galaxy \"\$CG_PIP_INDEX_URL\"; fi && poetry install --only main --no-interaction --no-root;; esac\nFROM registry.cn-shanghai.aliyuncs.com/swoole-public/python:\${CG_PYTHON_VERSION}-slim-bookworm AS runtime\nARG CG_APP_DIR\nARG CG_APP_PORT\nARG CG_RUNTIME_PACKAGES=\"\"\n"
             . $this->debianStageArgs() . "\n"
             . "ENV PATH=/opt/venv/bin:\$PATH PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1\n"
             . $this->debianInstall('$CG_RUNTIME_PACKAGES') . "\nRUN useradd -r -u 10001 app\nWORKDIR \${CG_APP_DIR}\nCOPY --from=builder /opt/venv /opt/venv\nCOPY --from=builder --chown=app:app \${CG_APP_DIR} \${CG_APP_DIR}\n"
@@ -1015,13 +1015,14 @@ SH;
         $javaRuntimeSetup = $options['runtime_packages'] === []
             ? "RUN set -eux; test -e \"/usr/share/zoneinfo/\$CG_TIMEZONE\"; ln -snf \"/usr/share/zoneinfo/\$CG_TIMEZONE\" /etc/localtime; echo \"\$CG_TIMEZONE\" > /etc/timezone"
             : $this->debianInstall('$CG_RUNTIME_PACKAGES');
-        $runtimeHeader = "FROM eclipse-temurin:\${CG_JAVA_VERSION}-jre AS runtime\nARG CG_APP_DIR\nARG CG_APP_PORT\nARG CG_JAVA_TOOL_OPTIONS\nARG CG_RUNTIME_PACKAGES=\"\"\n"
+        $runtimeHeader = "FROM registry.cn-shanghai.aliyuncs.com/swoole-public/eclipse-temurin:\${CG_JAVA_VERSION}-jre AS runtime\nARG CG_APP_DIR\nARG CG_APP_PORT\nARG CG_JAVA_TOOL_OPTIONS\nARG CG_RUNTIME_PACKAGES=\"\"\n"
             . $this->debianStageArgs() . "\nENV JAVA_TOOL_OPTIONS=\${CG_JAVA_TOOL_OPTIONS}\n"
             . $javaRuntimeSetup . "\nRUN useradd -r -u 10001 app\nWORKDIR \${CG_APP_DIR}\n";
         $runtimeFooter = ($options['non_root'] ? "USER app\n" : '')
             . "EXPOSE \${CG_APP_PORT}\n" . $this->healthcheck($options);
         if ($manager === 'gradle') {
-            $dockerfile = "# syntax=docker/dockerfile:1.7\nARG CG_JAVA_VERSION\nFROM gradle:8-jdk\${CG_JAVA_VERSION} AS builder\nARG CG_JAVA_MIRROR\nARG CG_BUILDER_PACKAGES=\"\"\n"
+            $gradleTag = $options['runtime_version'] === '22' ? '8.8.0-jdk22' : '8-jdk' . $options['runtime_version'];
+            $dockerfile = "# syntax=registry.cn-shanghai.aliyuncs.com/swoole-public/dockerfile:1.7\nARG CG_JAVA_VERSION\nFROM registry.cn-shanghai.aliyuncs.com/swoole-public/gradle:{$gradleTag} AS builder\nARG CG_JAVA_MIRROR\nARG CG_BUILDER_PACKAGES=\"\"\n"
                 . $this->debianStageArgs() . "\n"
                 . ($options['builder_packages'] === [] ? '' : $this->debianInstall('$CG_BUILDER_PACKAGES') . "\n")
                 . "RUN printf '%s\\n' 'allprojects { repositories { maven { url = uri(System.getenv(\"CG_JAVA_MIRROR\")) }; mavenCentral() } }' > /tmp/galaxy.init.gradle\nWORKDIR /src\nCOPY gradle* settings.gradle* build.gradle* ./\nRUN --mount=type=cache,target=/home/gradle/.gradle gradle --init-script /tmp/galaxy.init.gradle dependencies --no-daemon\nCOPY . .\nRUN --mount=type=cache,target=/home/gradle/.gradle set -eux; gradle --init-script /tmp/galaxy.init.gradle build -x test --no-daemon; jar=\$(find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar' -print -quit); test -n \"\$jar\"; cp \"\$jar\" /out.jar\n"
@@ -1029,7 +1030,7 @@ SH;
                 . $runtimeFooter . 'ENTRYPOINT ' . $this->command(['java', '-jar', $options['app_dir'] . '/app.jar'], $options) . "\n";
             return [$dockerfile, $args, []];
         }
-        $maven = "# syntax=docker/dockerfile:1.7\nARG CG_JAVA_VERSION\nFROM maven:3.9-eclipse-temurin-\${CG_JAVA_VERSION} AS builder\nARG CG_JAVA_MIRROR\nARG CG_BUILDER_PACKAGES=\"\"\n"
+        $maven = "# syntax=registry.cn-shanghai.aliyuncs.com/swoole-public/dockerfile:1.7\nARG CG_JAVA_VERSION\nFROM registry.cn-shanghai.aliyuncs.com/swoole-public/maven:3.9-eclipse-temurin-\${CG_JAVA_VERSION} AS builder\nARG CG_JAVA_MIRROR\nARG CG_BUILDER_PACKAGES=\"\"\n"
             . $this->debianStageArgs() . "\n"
             . ($options['builder_packages'] === [] ? '' : $this->debianInstall('$CG_BUILDER_PACKAGES') . "\n")
             . "RUN printf '%s' '<settings><mirrors><mirror><id>galaxy</id><mirrorOf>*</mirrorOf><url>'\"\$CG_JAVA_MIRROR\"'</url></mirror></mirrors></settings>' > /tmp/settings.xml\nWORKDIR /src\nCOPY pom.xml ./\nRUN --mount=type=cache,target=/root/.m2 mvn -s /tmp/settings.xml -B -DskipTests dependency:go-offline\nCOPY . .\n";

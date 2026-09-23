@@ -44,7 +44,7 @@ final class BuildKitBuildSupportService
             ? 'Dockerfile.generated'
             : (string) ($buildProfile['repository_dockerfile_path'] ?? $buildSpec['dockerfile'] ?? 'Dockerfile');
         $command = [
-            'build', '--progress=plain', '--frontend=gateway.v0', '--opt', 'source=docker/dockerfile:1',
+            'build', '--progress=plain', '--frontend=gateway.v0', '--opt', 'source=registry.cn-shanghai.aliyuncs.com/swoole-public/dockerfile:1',
             '--local', 'context=' . $context,
             '--local', 'dockerfile=' . $dockerfileLocal,
             '--opt', 'filename=' . $dockerfileName,
