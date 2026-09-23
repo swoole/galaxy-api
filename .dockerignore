@@ -3,6 +3,7 @@
 .git/
 runtime/
 vendor/
+storage/keys/
 
 # The legacy asserts tree contained obsolete deployment assets and credentials.
 asserts/

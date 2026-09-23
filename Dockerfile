@@ -74,6 +74,10 @@ RUN set -ex \
 WORKDIR /opt/www
 
 COPY . .
+RUN if [ -d storage/keys ] && find storage/keys -type f ! -name '.gitkeep' -print -quit | grep -q .; then \
+        echo 'Refusing to build: storage/keys contains secret files' >&2; \
+        exit 1; \
+    fi
 COPY --from=ssh-relay-builder /out/galaxy-ssh-relay /usr/local/bin/galaxy-ssh-relay
 COPY --from=helm-service-builder /out/galaxy-helm-service /usr/local/bin/galaxy-helm-service
 RUN [ -f .env.example ] && cp .env.example .env
