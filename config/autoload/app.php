@@ -16,6 +16,9 @@ return [
     'admin_org' => (int) env('ADMIN_ORG', 1),
     // 管理员邮箱
     'admin_emails' => Utils::parseEmailsConfig(env('ADMIN_EMAILS', 'tianpian@swoole.com:田片')),
+    // 首次安装页面使用的一次性入口令牌。创建首个用户后安装路由永久关闭。
+    'install_token' => (string) env('GALAXY_INSTALL_TOKEN', ''),
+    'install_default_email' => (string) env('GALAXY_ADMIN_EMAIL', 'admin@example.com'),
 
     // hash id
     'hashid' => [

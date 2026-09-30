@@ -130,7 +130,7 @@ class SwarmApiClient
     {
         try {
             $response = $client->request('PUT', '/containers/' . rawurlencode($containerId) . '/archive', [
-                'query' => ['path' => $path, 'allowOverwriteDirWithFile' => 'true'],
+                'query' => ['path' => $path, 'noOverwriteDirNonDir' => 'true'],
                 'body' => $tar,
                 'headers' => ['Content-Type' => 'application/x-tar'],
             ]);

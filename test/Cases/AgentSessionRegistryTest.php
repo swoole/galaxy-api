@@ -90,8 +90,8 @@ class AgentSessionRegistryTest extends TestCase
         $server = new FakeAgentServer();
         $registry = new AgentSessionRegistry(null, null, false);
         $registry->register(7, 'swarm-a', 'worker-1', 'worker', '1.0.0', 1, $server, 11);
-        $this->ageSession($registry, 7, 'worker-1', 61);
-        $server->lastTimes[11] = time() - 61;
+        $this->ageSession($registry, 7, 'worker-1', 20);
+        $server->lastTimes[11] = time() - 20;
 
         self::assertSame(
             ['cluster_id' => 7, 'node_id' => 'worker-1', 'role' => 'worker'],
@@ -100,7 +100,7 @@ class AgentSessionRegistryTest extends TestCase
         self::assertSame(11, $registry->node(7, 'worker-1')['fd']);
     }
 
-    public function testWebSocketPingActivityKeepsOlderAgentSessionAlive(): void
+    public function testWebSocketPingActivityKeepsLegacyAgentSessionAlive(): void
     {
         $server = new FakeAgentServer();
         $registry = new AgentSessionRegistry(null, null, false);
@@ -109,6 +109,37 @@ class AgentSessionRegistryTest extends TestCase
         $server->lastTimes[11] = time();
 
         self::assertSame(11, $registry->node(7, 'worker-1')['fd']);
+    }
+
+    public function testWebSocketPingCannotReplaceApplicationHeartbeatAfterNegotiation(): void
+    {
+        $server = new FakeAgentServer();
+        $registry = new AgentSessionRegistry(null, null, false);
+        $registry->register(7, 'swarm-a', 'worker-1', 'worker', '1.0.4', 1, $server, 11);
+        self::assertNotNull($registry->heartbeat(11));
+        $this->ageSession($registry, 7, 'worker-1', 61);
+        $server->lastTimes[11] = time();
+
+        $this->expectException(AppException::class);
+        $this->expectExceptionMessage('目标节点 Agent 当前不在线');
+        $registry->node(7, 'worker-1');
+    }
+
+    public function testResponseFrameDoesNotRefreshHeartbeat(): void
+    {
+        $server = new FakeAgentServer();
+        $registry = new AgentSessionRegistry(null, null, false);
+        $registry->register(7, 'swarm-a', 'worker-1', 'worker', '1.0.0', 1, $server, 11);
+        $this->ageSession($registry, 7, 'worker-1', 20);
+
+        $reflection = new \ReflectionClass($registry);
+        $property = $reflection->getProperty('sessions');
+        $before = $property->getValue($registry)[7]['worker-1']['last_seen_at'];
+        self::assertSame(
+            ['cluster_id' => 7, 'node_id' => 'worker-1', 'role' => 'worker'],
+            $registry->heartbeat(11, false)
+        );
+        self::assertSame($before, $property->getValue($registry)[7]['worker-1']['last_seen_at']);
     }
 
     public function testInstanceIdentityUsesMasterPidFileOutsideServerWorker(): void

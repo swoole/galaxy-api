@@ -20,8 +20,8 @@ class AgentSessionRegistry
 {
     private const KEY_PREFIX = 'galaxy:docker-agent:session:';
     private const LEASE_SECONDS = 45;
-    private const HEARTBEAT_SECONDS = 15;
-    private const HEARTBEAT_TIMEOUT_SECONDS = 60;
+    private const HEARTBEAT_SECONDS = 10;
+    private const HEARTBEAT_TIMEOUT_SECONDS = 40;
 
     /**
      * @var array<int, array<string, array{
@@ -36,6 +36,7 @@ class AgentSessionRegistry
      *     instance_id: string,
      *     worker_id: int,
      *     last_seen_at: int,
+     *     application_heartbeat: bool,
      *     redis_payload?: string
      * }>>
      */
@@ -88,6 +89,7 @@ class AgentSessionRegistry
             'instance_id' => $this->instanceId($server),
             'worker_id' => is_int($workerId) ? $workerId : 0,
             'last_seen_at' => time(),
+            'application_heartbeat' => false,
         ];
         $this->sessions[$clusterId][$nodeId] = $session;
         $this->refreshLease($clusterId, $nodeId);
@@ -95,19 +97,22 @@ class AgentSessionRegistry
     }
 
     /** @return null|array{cluster_id: int, node_id: string, role: string} */
-    public function heartbeat(int $fd): ?array
+    public function heartbeat(int $fd, bool $refresh = true): ?array
     {
         foreach ($this->sessions as $clusterId => $nodes) {
             foreach ($nodes as $nodeId => $session) {
-                if ($session['fd'] !== $fd || ! $session['server']->isEstablished($fd)) {
+                if ($session['fd'] !== $fd || ! $this->sessionIsActive($session)) {
                     continue;
                 }
-                $this->sessions[$clusterId][$nodeId]['last_seen_at'] = time();
-                try {
-                    $this->refreshLease((int) $clusterId, $nodeId);
-                } catch (Throwable) {
-                    // Keep the live socket usable during a transient Redis
-                    // failure; the watchdog will retry the lease refresh.
+                if ($refresh) {
+                    $this->sessions[$clusterId][$nodeId]['last_seen_at'] = time();
+                    $this->sessions[$clusterId][$nodeId]['application_heartbeat'] = true;
+                    try {
+                        $this->refreshLease((int) $clusterId, $nodeId);
+                    } catch (Throwable) {
+                        // Keep the live socket usable during a transient Redis
+                        // failure; the watchdog will retry the lease refresh.
+                    }
                 }
                 return ['cluster_id' => (int) $clusterId, 'node_id' => $nodeId, 'role' => $session['role']];
             }
@@ -377,7 +382,8 @@ class AgentSessionRegistry
                     return;
                 }
                 if (! $this->sessionIsActive($session)) {
-                    $this->discardLocalSession($clusterId, $nodeId, 'agent heartbeat timeout');
+                    // onClose removes the session and marks the node offline.
+                    $session['server']->disconnect($session['fd'], 1001, 'agent heartbeat timeout');
                     return;
                 }
                 try {
@@ -399,16 +405,17 @@ class AgentSessionRegistry
     private function sessionLastSeenAt(array $session): int
     {
         $lastSeenAt = (int) ($session['last_seen_at'] ?? 0);
-        if (method_exists($session['server'], 'getClientInfo')) {
-            try {
-                $info = $session['server']->getClientInfo($session['fd']);
-                if (is_array($info)) {
-                    $lastSeenAt = max($lastSeenAt, (int) ($info['last_time'] ?? 0));
-                }
-            } catch (Throwable) {
-                // Application heartbeats remain authoritative when socket
-                // metadata is temporarily unavailable.
+        if (! empty($session['application_heartbeat']) || ! method_exists($session['server'], 'getClientInfo')) {
+            return $lastSeenAt;
+        }
+        try {
+            $info = $session['server']->getClientInfo($session['fd']);
+            if (is_array($info)) {
+                return max($lastSeenAt, (int) ($info['last_time'] ?? 0));
             }
+        } catch (Throwable) {
+            // Legacy Agents use WebSocket Ping as their heartbeat. A temporary
+            // metadata lookup failure falls back to the last known activity.
         }
         return $lastSeenAt;
     }

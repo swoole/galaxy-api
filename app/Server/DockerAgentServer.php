@@ -163,7 +163,7 @@ class DockerAgentServer implements OnOpenInterface, OnMessageInterface, OnCloseI
         try {
             $message = json_decode((string) $frame->data, true, 512, JSON_THROW_ON_ERROR);
             $type = (string) ($message['type'] ?? '');
-            $session = $this->sessions->heartbeat((int) $frame->fd);
+            $session = $this->sessions->heartbeat((int) $frame->fd, $type === 'heartbeat');
             if ($session === null) {
                 $server->disconnect((int) $frame->fd, 1008, 'agent session expired');
                 return;

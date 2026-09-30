@@ -6,5 +6,8 @@ declare(strict_types=1);
  *
  * @link     https://www.swoole.com
  */
+use App\Command\User\CreateUserCommand;
+
 return [
+    CreateUserCommand::class,
 ];

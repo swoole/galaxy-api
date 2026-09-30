@@ -26,6 +26,9 @@ Router::addServer('http', function () {
 });
 
 Router::get('/healthz', 'App\Controller\HealthzController@healthz'); //获取图形验证码
+Router::get('/install', 'App\Controller\InstallController@page');
+Router::get('/install/status', 'App\Controller\InstallController@status');
+Router::post('/install/initialize', 'App\Controller\InstallController@initialize');
 // Only the co-located SSH relay may call these endpoints. They deliberately do
 // not use browser login middleware and require SSH_RELAY_INTERNAL_TOKEN instead.
 Router::post('/internal/ssh/authenticate', 'App\Controller\InternalSshRelayController@authenticate');

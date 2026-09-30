@@ -40,7 +40,32 @@ class AgentRelayService
     /** @return array<int, array{cluster_id: int, node_id: string, role: string}> */
     public function unregister(int $fd): array
     {
-        return $this->sessions->unregister($fd);
+        $removed = $this->sessions->unregister($fd);
+        foreach ($this->pending as $request) {
+            if (($request['fd'] ?? null) === $fd) {
+                $request['channel']->close();
+            }
+        }
+        foreach ($this->forwarded as $id => $request) {
+            if ($request['fd'] !== $fd) {
+                continue;
+            }
+            unset($this->forwarded[$id]);
+            try {
+                $this->sendReply($request['reply'], [
+                    'op' => 'response',
+                    'message' => [
+                        'type' => $request['stream'] ? 'stream_closed' : 'response',
+                        'id' => $id,
+                        'error' => 'Docker Agent 连接已断开',
+                    ],
+                ]);
+            } catch (Throwable) {
+                // The original requester will still time out if its IPC
+                // worker has already exited.
+            }
+        }
+        return $removed;
     }
 
     public function isOnline(int $clusterId, ?string $nodeId = null): bool
@@ -125,6 +150,12 @@ class AgentRelayService
             $ready = $channel->pop(15);
             if (! is_array($ready) || ($ready['type'] ?? '') !== 'stream_ready') {
                 $this->closeStream($id, $connection);
+                if (is_array($ready) && ! empty($ready['error'])) {
+                    throw new AppException(503, (string) $ready['error']);
+                }
+                if (isset($connection['fd']) && ! $this->sessions->owns($clusterId, $connection['node_id'], $connection['fd'])) {
+                    throw new AppException(503, 'Docker Agent 连接已断开');
+                }
                 throw new AppException(504, 'Docker Agent 流连接超时');
             }
             if (! empty($ready['error'])) {
@@ -288,6 +319,9 @@ class AgentRelayService
             $this->forward($connection, $payload, $timeout);
             $message = $channel->pop($timeout);
             if (! is_array($message)) {
+                if (isset($connection['fd']) && ! $this->sessions->owns((int) $connection['cluster_id'], (string) $connection['node_id'], (int) $connection['fd'])) {
+                    throw new AppException(503, 'Docker Agent 连接已断开');
+                }
                 throw new AppException(504, str_starts_with((string) $payload['type'], 'domain_')
                     ? 'Agent 领域命令执行超时'
                     : 'Docker Agent 请求超时');
