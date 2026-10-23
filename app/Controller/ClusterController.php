@@ -22,6 +22,8 @@ use App\Services\Docker\SwarmWebGatewayService;
 use App\Services\Gateway\GatewayHttpMonitoringService;
 use App\Services\Docker\SwarmPrometheusService;
 use App\Services\Gateway\GatewayVhostService;
+use App\Services\Gateway\WafManagementService;
+use App\Services\Gateway\WafEventService;
 use App\Services\Project\ProjectRouteService;
 use App\Services\Project\ProjectSwarmScope;
 use App\Services\GroupResourceGrantService;
@@ -61,6 +63,12 @@ class ClusterController extends AbstractController
 
     #[Inject]
     protected GatewayVhostService $gatewayVhostService;
+
+    #[Inject]
+    protected WafManagementService $wafManagement;
+
+    #[Inject]
+    protected WafEventService $wafEvents;
 
     #[Inject]
     protected ProjectRouteService $projectRouteService;
@@ -229,6 +237,38 @@ class ClusterController extends AbstractController
             $cluster,
             (int) ($params['hours'] ?? 24)
         ));
+    }
+
+    public function swarmWaf()
+    {
+        $cluster = $this->resolveSwarmCluster();
+        return $this->success($this->wafManagement->profile($cluster, $this->projectSwarmScope->wafRouteIds($cluster)));
+    }
+
+    public function swarmWafSave()
+    {
+        $cluster = $this->resolveSwarmCluster();
+        $params = $this->validate(['source' => 'required|in:gateway,project', 'route_id' => 'required|integer|min:1',
+            'settings' => 'required|array']);
+        return $this->success($this->wafManagement->save($cluster, $params['source'], (int) $params['route_id'], $params['settings'],
+            $this->projectSwarmScope->wafRouteIds($cluster)));
+    }
+
+    public function swarmWafEvents()
+    {
+        $cluster = $this->resolveSwarmCluster();
+        $params = $this->validate(['hours' => 'nullable|integer|min:1|max:720', 'policy_id' => 'nullable|integer|min:1',
+            'action' => 'nullable|in:block,monitor,detected', 'ip' => 'nullable|ip', 'page' => 'nullable|integer|min:1|max:10000']);
+        return $this->success($this->wafEvents->report($cluster, array_filter($params, static fn ($v) => $v !== null),
+            $this->projectSwarmScope->wafRouteIds($cluster)));
+    }
+
+    public function swarmWafValidate()
+    {
+        $cluster = $this->resolveSwarmCluster();
+        $this->projectSwarmScope->wafRouteIds($cluster);
+        $params = $this->validate(['settings' => 'required|array']);
+        return $this->success(['settings' => $this->wafManagement->validateSettings($params['settings'])]);
     }
 
     public function deploySwarmWebGateway()

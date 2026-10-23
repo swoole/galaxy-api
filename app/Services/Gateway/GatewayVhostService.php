@@ -27,7 +27,8 @@ class GatewayVhostService
         private SwarmContainerExecService $containerExec,
         private TlsCertificateService $certificates,
         private SwarmGatewayCertificateDeployer $certificateDeployer,
-        private SwarmServiceReferenceLock $serviceReferenceLock
+        private SwarmServiceReferenceLock $serviceReferenceLock,
+        private WafRuntimeService $waf
     ) {}
 
     public function list(
@@ -280,9 +281,10 @@ class GatewayVhostService
         ));
     }
 
-    public function deploy(int $orgId, int $clusterId): void
+    public function deploy(int $orgId, int $clusterId, ?callable $mutation = null): void
     {
-        $this->gatewayLock->synchronized($orgId, $clusterId, function () use ($orgId, $clusterId): void {
+        $this->gatewayLock->synchronized($orgId, $clusterId, function () use ($orgId, $clusterId, $mutation): void {
+            if ($mutation !== null) $mutation();
             $this->deployUnlocked($orgId, $clusterId);
         }, 30, 300);
     }
@@ -422,8 +424,28 @@ class GatewayVhostService
         $vhosts = GatewayVhost::where('org_id', $orgId)->where('cluster_id', $clusterId)
             ->where('enabled', 1)->with(['certificate', 'rewrites'])->orderBy('id')->get();
         $projectRoutes = ProjectRoute::where('org_id', $orgId)->where('cluster_id', $clusterId)
-            ->where('enabled', 1)->orderBy('id')->get();
+            ->where('enabled', 1)->with('runtime')->orderBy('id')->get();
         $configuration = $this->buildYaml($vhosts);
+        $wafRoutes = $this->waf->prepare($cluster, $gateway, $vhosts, $projectRoutes);
+        foreach ($projectRoutes as $route) {
+            if ($route->runtime === null) continue;
+            $host = ProjectServiceIdentity::runtimeDockerName($route->runtime);
+            $lb = ['servers' => [['url' => sprintf('%s://%s:%d', $route->upstream_scheme ?: 'http', $host, $route->target_port)]],
+                'passHostHeader' => (bool) $route->pass_host_header,
+                'serversTransport' => 'cg-project-route-' . $route->id . '-transport',
+                'responseForwarding' => ['flushInterval' => '-1ms']];
+            if ($route->healthcheck_path) {
+                $lb['healthCheck'] = ['path' => $route->healthcheck_path,
+                    'interval' => max(1000, (int) $route->healthcheck_interval_ms) . 'ms',
+                    'timeout' => max(100, (int) $route->healthcheck_timeout_ms) . 'ms'];
+            }
+            if ($route->sticky_cookie_enabled) {
+                $lb['sticky'] = ['cookie' => ['name' => $route->sticky_cookie_name, 'httpOnly' => true,
+                    'secure' => (bool) $route->tls_enabled, 'sameSite' => 'lax']];
+            }
+            $configuration['http']['services']['cg-project-route-' . $route->id . '-svc'] = ['loadBalancer' => $lb];
+        }
+        $configuration = WafRouteConfig::apply($configuration, $wafRoutes);
         $projectTransports = $this->buildProjectRouteTransports($projectRoutes);
         if ($projectTransports !== []) {
             $configuration['http']['serversTransports'] = array_merge(
@@ -506,6 +528,8 @@ class GatewayVhostService
                 (int) $spec['TaskTemplate']['ForceUpdate']
             );
         }, 60);
+
+        $this->waf->commit($cluster, $wafRoutes);
 
         $now = time();
         GatewayVhost::where('org_id', $orgId)->where('cluster_id', $clusterId)

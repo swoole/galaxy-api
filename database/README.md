@@ -28,3 +28,9 @@ php database/audit_query_columns.php
 
 The audit is deliberately conservative. Relationship projections and SQL
 aliases can be reported against the initiating model and require source review.
+
+The optional gateway WAF module adds `galaxy_waf_policy` and `galaxy_waf_event`.
+For an existing installation, apply `migrations/0060_add_waf.sql` before enabling
+`WAF_ENABLED`. The migration is additive and idempotent; it does not change
+existing gateways, routes, or application data. Adapt the table prefix when
+using a prefix other than `galaxy_`.

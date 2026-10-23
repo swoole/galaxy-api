@@ -578,6 +578,12 @@ Router::addGroup('', function () {
         Router::get('/swarm/check', 'App\Controller\ClusterController@checkConnectivity'); // Docker Swarm 连通性检查
         Router::get('/swarm/web-gateway', 'App\Controller\ClusterController@swarmWebGateway', ['permission' => $projectScoped]); // 七层 Web 网关状态
         Router::get('/swarm/web-gateway/metrics', 'App\Controller\ClusterController@swarmWebGatewayMetrics'); // 管理员域名流量统计
+        Router::get('/swarm/waf', 'App\Controller\ClusterController@swarmWaf', ['permission' => $projectScoped]);
+        Router::put('/swarm/waf', 'App\Controller\ClusterController@swarmWafSave', ['permission' => [
+            [OrgMember::ROLE_MANAGER => 1], [GroupMember::ROLE_DIRECTOR => 1], [ProjectMember::ROLE_DIRECTOR => 1],
+        ]]);
+        Router::get('/swarm/waf/events', 'App\Controller\ClusterController@swarmWafEvents', ['permission' => $projectScoped]);
+        Router::post('/swarm/waf/validate', 'App\Controller\ClusterController@swarmWafValidate', ['permission' => $projectScoped]);
         Router::put('/swarm/web-gateway', 'App\Controller\ClusterController@deploySwarmWebGateway'); // 部署或更新七层 Web 网关
         Router::delete('/swarm/web-gateway', 'App\Controller\ClusterController@removeSwarmWebGateway'); // 删除七层 Web 网关 Service
         Router::put('/swarm/web-gateway/workspace-domain', 'App\Controller\ClusterController@setSwarmWorkspaceDomain'); // 设置 Workspace 泛域名分配规则

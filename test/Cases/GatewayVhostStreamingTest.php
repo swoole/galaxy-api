@@ -11,6 +11,7 @@ namespace HyperfTest\Cases;
 
 use App\Model\GatewayVhost;
 use App\Services\Gateway\GatewayVhostService;
+use App\Services\Gateway\WafRouteConfig;
 use Hyperf\Database\Model\Collection;
 use PHPUnit\Framework\TestCase;
 
@@ -60,6 +61,9 @@ final class GatewayVhostStreamingTest extends TestCase
         $service = (new \ReflectionClass(GatewayVhostService::class))->newInstanceWithoutConstructor();
         $buildYaml = new \ReflectionMethod(GatewayVhostService::class, 'buildYaml');
         $configuration = $buildYaml->invoke($service, [$vhost]);
+        $configuration = WafRouteConfig::apply($configuration, ['gateway:7' => ['url' => 'http://waf:8080']]);
+        self::assertSame([['url' => 'http://waf:8080']], $configuration['http']['services']['cg-vhost-7-svc']['loadBalancer']['servers']);
+        self::assertSame($configuration['http']['routers']['cg-vhost-7']['service'], $configuration['http']['routers']['cg-vhost-7-sse']['service']);
 
         self::assertSame(
             '-1ms',

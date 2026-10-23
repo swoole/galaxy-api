@@ -12,6 +12,7 @@ use App\Model\ClusterWebGateway;
 use App\Model\GatewayVhost;
 use App\Model\GatewayVhostRewrite;
 use App\Model\TlsCertificate;
+use App\Model\WafPolicy;
 use App\Services\Docker\SwarmApiClient;
 use App\Services\ManagedDomainService;
 use App\Services\Gateway\SwarmGatewayCertificateDeployer;
@@ -420,8 +421,15 @@ class ProjectRouteService
         $labels['traefik.swarm.network'] = (string) $routes->first()->network_name;
         $certificateIds = $routes->pluck('certificate_id')->filter()->unique()->values()->all();
         $certificates = TlsCertificate::whereIn('id', $certificateIds)->get()->keyBy('id');
+        $wafRouteIds = config('waf.enabled', false)
+            ? WafPolicy::where('org_id', $runtime->org_id)->where('cluster_id', $runtime->cluster_id)
+                ->where('route_source', 'project')->whereIn('route_id', $routes->pluck('id')->all())
+                ->pluck('route_id')->all()
+            : [];
         foreach ($routes as $route) {
             $name = 'cg-' . $route->id;
+            $routeService = in_array((int) $route->id, array_map('intval', $wafRouteIds), true)
+                ? 'cg-project-route-' . $route->id . '-svc@file' : $name;
             $rule = 'Host(`' . $route->hostname . '`)';
             if ($route->path_prefix !== '/') {
                 $matcher = match ((string) $route->path_match) {
@@ -443,7 +451,7 @@ class ProjectRouteService
             $labels['traefik.http.routers.' . $name . '.rule'] = $rule;
             $labels['traefik.http.routers.' . $name . '.entrypoints'] = $route->tls_enabled
                 ? 'websecure' : (string) $route->entrypoint;
-            $labels['traefik.http.routers.' . $name . '.service'] = $name;
+            $labels['traefik.http.routers.' . $name . '.service'] = $routeService;
             if ($route->priority > 0) {
                 $labels['traefik.http.routers.' . $name . '.priority'] = (string) $route->priority;
             }
@@ -556,7 +564,7 @@ class ProjectRouteService
                 . ' && Header(`Accept`, `text/event-stream`)';
             $labels['traefik.http.routers.' . $streamRouter . '.entrypoints'] = $route->tls_enabled
                 ? 'websecure' : (string) $route->entrypoint;
-            $labels['traefik.http.routers.' . $streamRouter . '.service'] = $name;
+            $labels['traefik.http.routers.' . $streamRouter . '.service'] = $routeService;
             $streamMiddlewares = array_values(array_filter(
                 $middlewares,
                 static fn (string $middleware): bool => ! in_array($middleware, [
@@ -583,7 +591,7 @@ class ProjectRouteService
                 $redirect = $name . '-https';
                 $labels['traefik.http.routers.' . $httpRouter . '.rule'] = $rule;
                 $labels['traefik.http.routers.' . $httpRouter . '.entrypoints'] = 'web';
-                $labels['traefik.http.routers.' . $httpRouter . '.service'] = $name;
+                $labels['traefik.http.routers.' . $httpRouter . '.service'] = $routeService;
                 $redirectMiddlewares = [];
                 if ((array) $route->ip_allowlist !== []) {
                     $redirectMiddlewares[] = $name . '-allow-ip';

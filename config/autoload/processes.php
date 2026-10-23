@@ -11,6 +11,7 @@ return [
     App\Process\AgentPresenceProcess::class,
     App\Process\SwarmImageInventoryProcess::class,
     App\Process\AcmeBackupProcess::class,
+    App\Process\WafEventProcess::class,
     App\Process\ProjectObserverProcess::class,
     App\Process\ProjectRetentionProcess::class,
 ];

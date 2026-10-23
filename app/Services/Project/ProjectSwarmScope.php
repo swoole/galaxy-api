@@ -7,6 +7,8 @@ use App\Model\Cluster;
 use App\Model\GatewayVhost;
 use App\Model\GroupResourceGrant;
 use App\Model\ProjectRuntime;
+use App\Model\Project;
+use App\Model\ProjectRoute;
 use App\Services\Docker\SwarmOverviewService;
 use App\Support\Functions;
 
@@ -37,6 +39,23 @@ final class ProjectSwarmScope
         if (! GroupResourceGrant::canUseCluster((int) $cluster->org_id, $groupId, (int) $cluster->id)) {
             throw new AppException(403, '当前 Docker Swarm 集群未分配给该项目组');
         }
+    }
+
+    /** Public gateway routes are never configurable through a project view. */
+    public function wafRouteIds(Cluster $cluster): ?array
+    {
+        $projectId = $this->projectId();
+        $groupId = (int) Functions::getContextValue('group_id', false, 0);
+        if ($projectId === null) {
+            if ($groupId > 0) throw new AppException(403, '请先选择项目，再管理项目 WAF');
+            return null;
+        }
+        if (! Project::where('id', $projectId)->where('org_id', $cluster->org_id)->where('group_id', $groupId)->exists()) {
+            throw new AppException(404, '当前项目组中不存在该项目');
+        }
+        $this->assertGrantedCluster($cluster);
+        return ProjectRoute::where('org_id', $cluster->org_id)->where('group_id', $groupId)
+            ->where('project_id', $projectId)->where('cluster_id', $cluster->id)->pluck('id')->map(static fn ($id) => (int) $id)->all();
     }
 
     /** @return null|array<int, string> null denotes unrestricted cluster scope. */

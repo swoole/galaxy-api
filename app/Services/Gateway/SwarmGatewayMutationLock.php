@@ -17,9 +17,10 @@ final class SwarmGatewayMutationLock
         int $clusterId,
         callable $callback,
         int $waitSeconds = 30,
-        int $ttlSeconds = 300
+        int $ttlSeconds = 300,
+        string $scope = 'gateway'
     ): mixed {
-        $key = sprintf('cg:swarm-gateway-lock:%d:%d', $orgId, $clusterId);
+        $key = sprintf('cg:swarm-%s-lock:%d:%d', $scope, $orgId, $clusterId);
         $token = bin2hex(random_bytes(16));
         $deadline = microtime(true) + max(0, $waitSeconds);
         $ttlSeconds = max(60, $ttlSeconds);
