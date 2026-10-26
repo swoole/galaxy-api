@@ -24,12 +24,12 @@ final class WafEventReportTest extends TestCase
         $container->set(ConnectionResolverInterface::class, new ConnectionResolver(['default' => $connection]));
         $config->set('waf.enabled', true);
         try {
-            $connection->statement('CREATE TABLE galaxy_waf_event (id INTEGER PRIMARY KEY, org_id INTEGER, cluster_id INTEGER, policy_id INTEGER, occurred_at INTEGER, client_ip TEXT, action TEXT, messages TEXT)');
+            $connection->statement('CREATE TABLE galaxy_waf_event (id INTEGER PRIMARY KEY, org_id INTEGER, cluster_id INTEGER, policy_id INTEGER, occurred_at INTEGER, client_ip TEXT, action TEXT, messages TEXT, uri TEXT DEFAULT "/", method TEXT DEFAULT "GET", status_code INTEGER DEFAULT 0)');
             $hour = (int) floor(time() / 3600) * 3600;
             foreach ([[1, 1, 1, 'block', $hour - 1], [2, 1, 1, 'monitor', $hour - 1800],
                 [3, 2, 1, 'block', $hour - 1], [4, 1, 2, 'block', $hour - 1],
                 [5, 1, 1, 'block', $hour]] as [$id, $org, $clusterId, $action, $at]) {
-                $connection->insert('INSERT INTO galaxy_waf_event VALUES (?, ?, ?, 7, ?, ?, ?, ?)', [$id, $org, $clusterId, $at, '192.0.2.' . $id, $action, '[]']);
+                $connection->insert('INSERT INTO galaxy_waf_event (id,org_id,cluster_id,policy_id,occurred_at,client_ip,action,messages) VALUES (?, ?, ?, 7, ?, ?, ?, ?)', [$id, $org, $clusterId, $at, '192.0.2.' . $id, $action, '[]']);
             }
             $cluster = new Cluster(['org_id' => 1]); $cluster->id = 1;
             $service = (new \ReflectionClass(WafEventService::class))->newInstanceWithoutConstructor();
@@ -46,7 +46,7 @@ final class WafEventReportTest extends TestCase
             self::assertSame(2, $blocked['total']);
             $connection->statement('CREATE TABLE galaxy_waf_policy (id INTEGER, org_id INTEGER, cluster_id INTEGER, route_source TEXT, route_id INTEGER)');
             $connection->statement("INSERT INTO galaxy_waf_policy VALUES (7,1,1,'project',71), (8,1,1,'gateway',71), (9,2,1,'project',71)");
-            $connection->insert('INSERT INTO galaxy_waf_event VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [6, 1, 1, 8, time(), '192.0.2.6', 'block', '[]']);
+            $connection->insert('INSERT INTO galaxy_waf_event (id,org_id,cluster_id,policy_id,occurred_at,client_ip,action,messages) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [6, 1, 1, 8, time(), '192.0.2.6', 'block', '[]']);
             self::assertSame(4, $service->report($cluster, ['hours' => 24])['total']);
             self::assertSame(3, $service->report($cluster, ['hours' => 24], [71])['total']);
             self::assertSame(0, $service->report($cluster, ['hours' => 24], [])['total']);

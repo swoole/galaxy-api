@@ -33,6 +33,26 @@ final class WafProjectAccessTest extends TestCase
             self::assertSame(1, $permission->valid([2, 1, 9], $save));
             self::assertSame(1, $permission->valid([2, 1, 1], $read));
             self::assertSame(1, $permission->valid([2, 1, 1], 'App\\Controller\\ClusterController@swarmWafEvents'));
+            $export = 'App\\Controller\\ClusterController@swarmWafEventsExport';
+            self::assertTrue($permission->needValid($export));
+            self::assertSame(1, $permission->valid([2, 1, 1], $export));
+            self::assertSame(0, $permission->valid([2], $export));
+            foreach (['swarmWafHistory', 'swarmWafRevision', 'swarmWafAlerts', 'swarmWafBans', 'swarmWafDataSources'] as $action) {
+                self::assertSame(1, $permission->valid([2, 1, 1], 'App\\Controller\\ClusterController@' . $action));
+                self::assertSame(0, $permission->valid([2], 'App\\Controller\\ClusterController@' . $action));
+            }
+            foreach (['swarmWafDataSourceSave','swarmWafDataSourceRefresh','swarmWafDataSourceDelete'] as $action) {
+                $endpoint = 'App\\Controller\\ClusterController@' . $action;
+                self::assertSame(0, $permission->valid([2, 1, 1], $endpoint));
+                self::assertSame(0, $permission->valid([2, 9, 9], $endpoint));
+                self::assertSame(1, $permission->valid([1], $endpoint));
+            }
+            foreach (['swarmWafRestore', 'swarmWafAlertAcknowledge', 'swarmWafBanRelease'] as $action) {
+                $endpoint = 'App\\Controller\\ClusterController@' . $action;
+                self::assertSame(0, $permission->valid([2, 1, 1], $endpoint));
+                self::assertSame(1, $permission->valid([2, 1, 9], $endpoint));
+                self::assertSame(1, $permission->valid([1], $endpoint));
+            }
             self::assertSame(0, $permission->valid([2, 1, 1], $save));
             self::assertSame(0, $permission->valid([2, 1, false], $read));
             self::assertSame(0, $permission->valid([2], $read));

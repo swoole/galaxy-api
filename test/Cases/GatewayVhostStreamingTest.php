@@ -61,7 +61,9 @@ final class GatewayVhostStreamingTest extends TestCase
         $service = (new \ReflectionClass(GatewayVhostService::class))->newInstanceWithoutConstructor();
         $buildYaml = new \ReflectionMethod(GatewayVhostService::class, 'buildYaml');
         $configuration = $buildYaml->invoke($service, [$vhost]);
-        $configuration = WafRouteConfig::apply($configuration, ['gateway:7' => ['url' => 'http://waf:8080']]);
+        $configuration = WafRouteConfig::apply($configuration, ['gateway:7' => ['url' => 'http://waf:8080', 'gateway_token' => str_repeat('a',64)]]);
+        self::assertContains('cg-waf-gateway-7-auth', $configuration['http']['routers']['cg-vhost-7']['middlewares']);
+        self::assertContains('cg-waf-gateway-7-auth', $configuration['http']['routers']['cg-vhost-7-sse']['middlewares']);
         self::assertSame([['url' => 'http://waf:8080']], $configuration['http']['services']['cg-vhost-7-svc']['loadBalancer']['servers']);
         self::assertSame($configuration['http']['routers']['cg-vhost-7']['service'], $configuration['http']['routers']['cg-vhost-7-sse']['service']);
 

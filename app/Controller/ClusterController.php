@@ -71,6 +71,15 @@ class ClusterController extends AbstractController
     protected WafEventService $wafEvents;
 
     #[Inject]
+    protected \App\Services\Gateway\WafAlertService $wafAlerts;
+
+    #[Inject]
+    protected \App\Services\Gateway\WafAutoBanService $wafBans;
+
+    #[Inject]
+    protected \App\Services\Gateway\WafDataCatalog $wafData;
+
+    #[Inject]
     protected ProjectRouteService $projectRouteService;
 
     #[Inject]
@@ -249,18 +258,110 @@ class ClusterController extends AbstractController
     {
         $cluster = $this->resolveSwarmCluster();
         $params = $this->validate(['source' => 'required|in:gateway,project', 'route_id' => 'required|integer|min:1',
-            'settings' => 'required|array']);
+            'settings' => 'required|array', 'base_revision_id' => 'nullable|integer|min:0']);
         return $this->success($this->wafManagement->save($cluster, $params['source'], (int) $params['route_id'], $params['settings'],
-            $this->projectSwarmScope->wafRouteIds($cluster)));
+            $this->projectSwarmScope->wafRouteIds($cluster), (int) Functions::getLoginUser()->getId(),
+            isset($params['base_revision_id']) ? (int) $params['base_revision_id'] : null));
+    }
+
+    public function swarmWafDataSources()
+    {
+        $cluster = $this->resolveSwarmCluster();
+        $project = $this->projectSwarmScope->wafRouteIds($cluster);
+        $manager = $project === null && \App\Model\OrgMember::where('org_id', $cluster->org_id)
+            ->where('uid', Functions::getLoginUser()->getId())->where('role', \App\Model\OrgMember::ROLE_MANAGER)->exists();
+        return $this->success($this->wafData->listing((int) $cluster->org_id, $manager));
+    }
+
+    public function swarmWafDataSourceSave()
+    {
+        $cluster = $this->resolveSwarmCluster(); $params = $this->validate(['settings' => 'required|array']);
+        return $this->success($this->wafData->save((int) $cluster->org_id, $params['settings'], (int) Functions::getLoginUser()->getId()));
+    }
+
+    public function swarmWafDataSourceRefresh()
+    {
+        $cluster = $this->resolveSwarmCluster(); $params = $this->validate(['source_id' => 'required|integer|min:1']);
+        $this->wafData->refresh((int) $cluster->org_id, (int) $params['source_id']); return $this->success();
+    }
+
+    public function swarmWafDataSourceDelete()
+    {
+        $cluster = $this->resolveSwarmCluster(); $params = $this->validate(['source_id' => 'required|integer|min:1']);
+        $this->wafData->delete((int) $cluster->org_id, (int) $params['source_id']); return $this->success();
+    }
+
+    public function swarmWafHistory()
+    {
+        $cluster = $this->resolveSwarmCluster();
+        $params = $this->validate(['source' => 'required|in:gateway,project', 'route_id' => 'required|integer|min:1']);
+        return $this->success($this->wafManagement->history($cluster, $params['source'], (int) $params['route_id'], $this->projectSwarmScope->wafRouteIds($cluster)));
+    }
+
+    public function swarmWafRevision()
+    {
+        $cluster = $this->resolveSwarmCluster();
+        $params = $this->validate(['revision_id' => 'required|integer|min:1']);
+        return $this->success($this->wafManagement->revision($cluster, (int) $params['revision_id'], $this->projectSwarmScope->wafRouteIds($cluster)));
+    }
+
+    public function swarmWafRestore()
+    {
+        $cluster = $this->resolveSwarmCluster();
+        $params = $this->validate(['revision_id' => 'required|integer|min:1', 'base_revision_id' => 'required|integer|min:0']);
+        return $this->success($this->wafManagement->restore($cluster, (int) $params['revision_id'], $this->projectSwarmScope->wafRouteIds($cluster),
+            (int) Functions::getLoginUser()->getId(), (int) $params['base_revision_id']));
+    }
+
+    public function swarmWafAlerts()
+    {
+        $cluster = $this->resolveSwarmCluster();
+        return $this->success($this->wafAlerts->list($cluster, $this->projectSwarmScope->wafRouteIds($cluster)));
+    }
+
+    public function swarmWafAlertAcknowledge()
+    {
+        $cluster = $this->resolveSwarmCluster();
+        $params = $this->validate(['alert_id' => 'required|integer|min:1']);
+        $this->wafAlerts->acknowledge($cluster, (int) $params['alert_id'], $this->projectSwarmScope->wafRouteIds($cluster), (int) Functions::getLoginUser()->getId());
+        return $this->success();
+    }
+
+    public function swarmWafBans()
+    {
+        $cluster = $this->resolveSwarmCluster();
+        $params = $this->validate(['policy_id' => 'nullable|integer|min:1', 'ip' => 'nullable|ip',
+            'status' => 'nullable|in:active,expired,released,all', 'page' => 'nullable|integer|min:1|max:10000']);
+        return $this->success($this->wafBans->listing($cluster, $this->projectSwarmScope->wafRouteIds($cluster),
+            array_filter($params, static fn ($value) => $value !== null)));
+    }
+
+    public function swarmWafBanRelease()
+    {
+        $cluster = $this->resolveSwarmCluster();
+        $params = $this->validate(['ban_id' => 'required|integer|min:1']);
+        $this->wafBans->release($cluster, (int) $params['ban_id'], $this->projectSwarmScope->wafRouteIds($cluster), (int) Functions::getLoginUser()->getId());
+        return $this->success();
     }
 
     public function swarmWafEvents()
     {
         $cluster = $this->resolveSwarmCluster();
-        $params = $this->validate(['hours' => 'nullable|integer|min:1|max:720', 'policy_id' => 'nullable|integer|min:1',
-            'action' => 'nullable|in:block,monitor,detected', 'ip' => 'nullable|ip', 'page' => 'nullable|integer|min:1|max:10000']);
+        $params = $this->validate(\App\Services\Gateway\WafEventFilters::RULES);
         return $this->success($this->wafEvents->report($cluster, array_filter($params, static fn ($v) => $v !== null),
             $this->projectSwarmScope->wafRouteIds($cluster)));
+    }
+
+    public function swarmWafEventsExport()
+    {
+        $cluster = $this->resolveSwarmCluster();
+        $params = $this->validate(\App\Services\Gateway\WafEventFilters::RULES);
+        $export = $this->wafEvents->export($cluster, array_filter($params, static fn ($v) => $v !== null),
+            $this->projectSwarmScope->wafRouteIds($cluster));
+        return $this->downloadContent($export['content'], 'waf-events-' . gmdate('Ymd-His') . '.csv', 'text/csv; charset=utf-8')
+            ->withHeader('Cache-Control', 'no-store')->withHeader('Pragma', 'no-cache')
+            ->withHeader('X-Waf-Export-Rows', (string) $export['count'])
+            ->withHeader('X-Waf-Export-Truncated', $export['truncated'] ? '1' : '0');
     }
 
     public function swarmWafValidate()

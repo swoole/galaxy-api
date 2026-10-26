@@ -42,6 +42,24 @@ final class WafPolicyTest extends TestCase
             [['custom_rules' => [['action' => 'deny', 'enabled' => 'false', 'field' => 'uri', 'operator' => 'equals', 'value' => '/']]]],
             [['custom_rules' => [['action' => 'deny', 'conditions' => [['field' => 'header', 'name' => 'X-Test|.*', 'operator' => 'equals', 'value' => 'bad']]]]]],
             [['custom_rules' => [['action' => 'deny', 'conditions' => [['field' => 'cookie', 'name' => 'id\n', 'operator' => 'equals', 'value' => 'bad']]]]]],
+            [['ip_bans' => [['ip' => '192.0.2.1', 'expires_at' => 0]]]],
+            [['ip_bans' => [['ip' => 'bad-ip', 'expires_at' => 2000000000]]]],
+            [['ip_bans' => [['ip' => '192.0.2.1', 'expires_at' => 9999999999]]]],
+            [['ip_bans' => [['ip' => '192.0.2.1', 'expires_at' => 1, 'reason' => "line\nbreak"]]]],
+            [['ip_bans' => [['ip' => '192.0.2.0/33', 'expires_at' => 1]]]],
+            [['alerts' => ['enabled' => 'true']]], [['alerts' => ['cooldown_seconds' => 0]]],
+            [['alerts' => ['channels' => []]]], [['alerts' => ['channels' => ['webhook']]]],
+            [['alerts' => ['window_seconds' => 3601]]], [['alerts' => ['actions' => ['anything']]]],
+            [['auto_ban' => 'on']], [['auto_ban' => ['enabled' => 'true']]],
+            [['auto_ban' => ['enabled' => true, 'attack_enabled' => false, 'not_found_enabled' => false]]],
+            [['auto_ban' => ['window_seconds' => 59]]], [['auto_ban' => ['window_seconds' => 3601]]],
+            [['auto_ban' => ['attack_threshold' => 1]]], [['auto_ban' => ['not_found_threshold' => 9]]],
+            [['auto_ban' => ['duration_seconds' => 86401]]], [['auto_ban' => ['excluded_paths' => ['/x${ip}']]]],
+            [['browser' => 'yes']], [['browser' => ['enabled' => 'true']]], [['browser' => ['type' => 'cookie']]],
+            [['browser' => ['difficulty' => 11]]], [['browser' => ['difficulty' => 21]]],
+            [['browser' => ['challenge_seconds' => 301]]], [['browser' => ['clearance_seconds' => 0]]],
+            [['browser' => ['non_browser' => 'ignore']]], [['browser' => ['excluded_prefixes' => ['/a${uri}']]]],
+            [['browser' => ['excluded_paths' => array_fill(0, 51, '/api')]]],
         ];
     }
 
@@ -79,6 +97,21 @@ final class WafPolicyTest extends TestCase
         $renderer = new WafConfigRenderer();
         self::assertStringContainsString('limit_req_dry_run on;', $renderer->render($p, 'http://app:80', true, '10.0.4.0/24')['nginx.conf']);
         self::assertContains('MODSEC_RULE_ENGINE=DetectionOnly', $renderer->environment($p));
+    }
+
+    public function testTemporaryBansExpireInEngineWithoutAConfigurationChange(): void
+    {
+        $config = new WafPolicyConfig();
+        $policy = $config->normalize(['ip_allowlist' => ['192.0.2.1'], 'ip_bans' => [
+            ['ip' => '192.0.2.1', 'expires_at' => time() + 3600, 'reason' => 'temporary'],
+            ['ip' => '2001:db8::/32', 'expires_at' => 1],
+        ]]);
+        self::assertSame($policy, $config->normalize($policy));
+        $rules = (new WafConfigRenderer())->render($policy, 'http://app:80', true, '10.0.4.0/24')['rules.conf'];
+        self::assertStringContainsString('SecRule TIME_EPOCH "@lt 1" "t:none,setvar:\'tx.galaxy_ip_denied=1\'"', $rules);
+        self::assertStringContainsString('SecRule &TX:galaxy_ip_denied "@eq 0" "t:none,ctl:ruleEngine=Off"', $rules);
+        self::assertStringContainsString("tag:'galaxy-temp-ban',chain", $rules);
+        self::assertLessThan(strpos($rules, 'ctl:ruleEngine=Off'), strpos($rules, 'Galaxy temporary IP ban'));
     }
 
     public function testLegacyRulesNormalizeToIdempotentCompoundRulesAndPresetsPreserveTuning(): void

@@ -12,6 +12,7 @@ return [
     App\Process\SwarmImageInventoryProcess::class,
     App\Process\AcmeBackupProcess::class,
     App\Process\WafEventProcess::class,
+    App\Process\WafDataUpdateProcess::class,
     App\Process\ProjectObserverProcess::class,
     App\Process\ProjectRetentionProcess::class,
 ];

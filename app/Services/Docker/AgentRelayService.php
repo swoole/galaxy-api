@@ -160,7 +160,9 @@ class AgentRelayService
             }
             if (! empty($ready['error'])) {
                 $this->closeStream($id, $connection);
-                throw new AppException(502, 'Docker Agent：' . $ready['error']);
+                $context = [];
+                if (preg_match('/Docker 流连接返回 HTTP ([0-9]{3})/', (string) $ready['error'], $status)) $context['docker_status'] = (int) $status[1];
+                throw new AppException(502, 'Docker Agent：' . $ready['error'], $context);
             }
             return new AgentDockerStream($this, $connection, $id, $channel);
         } catch (Throwable $e) {

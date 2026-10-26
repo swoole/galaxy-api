@@ -26,6 +26,10 @@ Router::addServer('http', function () {
 });
 
 Router::get('/healthz', 'App\Controller\HealthzController@healthz'); //获取图形验证码
+// Machine-only HMAC credentials scoped to an immutable WAF policy snapshot.
+Router::get('/internal/waf/check', 'App\Controller\WafControlController@check');
+Router::get('/internal/waf/challenge', 'App\Controller\WafControlController@challenge');
+Router::post('/internal/waf/challenge/solve', 'App\Controller\WafControlController@solve');
 Router::get('/install', 'App\Controller\InstallController@page');
 Router::get('/install/status', 'App\Controller\InstallController@status');
 Router::post('/install/initialize', 'App\Controller\InstallController@initialize');
@@ -487,6 +491,7 @@ Router::addGroup('', function () {
             [GroupMember::ROLE_DIRECTOR => 1],
             ['*' => 1],
         ];
+        $wafOperation = [[OrgMember::ROLE_MANAGER => 1], [GroupMember::ROLE_DIRECTOR => 1], [ProjectMember::ROLE_DIRECTOR => 1]];
         // Provider resource modules use independent namespaces. Project
         // deployment still only enables providers with an installed runtime driver.
         Router::get('/k8s', 'App\Controller\Cluster\KubernetesClusterController@index');
@@ -579,10 +584,22 @@ Router::addGroup('', function () {
         Router::get('/swarm/web-gateway', 'App\Controller\ClusterController@swarmWebGateway', ['permission' => $projectScoped]); // 七层 Web 网关状态
         Router::get('/swarm/web-gateway/metrics', 'App\Controller\ClusterController@swarmWebGatewayMetrics'); // 管理员域名流量统计
         Router::get('/swarm/waf', 'App\Controller\ClusterController@swarmWaf', ['permission' => $projectScoped]);
-        Router::put('/swarm/waf', 'App\Controller\ClusterController@swarmWafSave', ['permission' => [
-            [OrgMember::ROLE_MANAGER => 1], [GroupMember::ROLE_DIRECTOR => 1], [ProjectMember::ROLE_DIRECTOR => 1],
-        ]]);
+        Router::get('/swarm/waf/data-sources', 'App\Controller\ClusterController@swarmWafDataSources', ['permission' => $projectScoped]);
+        // RouteCollector appends group permissions; provide all three scope slots
+        // so PermissionService's final three slots remain organization-only.
+        Router::put('/swarm/waf/data-sources', 'App\Controller\ClusterController@swarmWafDataSourceSave', ['permission' => [[OrgMember::ROLE_MANAGER => 1], [], []]]);
+        Router::post('/swarm/waf/data-sources/refresh', 'App\Controller\ClusterController@swarmWafDataSourceRefresh', ['permission' => [[OrgMember::ROLE_MANAGER => 1], [], []]]);
+        Router::delete('/swarm/waf/data-sources', 'App\Controller\ClusterController@swarmWafDataSourceDelete', ['permission' => [[OrgMember::ROLE_MANAGER => 1], [], []]]);
+        Router::put('/swarm/waf', 'App\Controller\ClusterController@swarmWafSave', ['permission' => $wafOperation]);
+        Router::get('/swarm/waf/history', 'App\Controller\ClusterController@swarmWafHistory', ['permission' => $projectScoped]);
+        Router::get('/swarm/waf/revision', 'App\Controller\ClusterController@swarmWafRevision', ['permission' => $projectScoped]);
+        Router::post('/swarm/waf/restore', 'App\Controller\ClusterController@swarmWafRestore', ['permission' => $wafOperation]);
+        Router::get('/swarm/waf/alerts', 'App\Controller\ClusterController@swarmWafAlerts', ['permission' => $projectScoped]);
+        Router::post('/swarm/waf/alerts/acknowledge', 'App\Controller\ClusterController@swarmWafAlertAcknowledge', ['permission' => $wafOperation]);
+        Router::get('/swarm/waf/bans', 'App\Controller\ClusterController@swarmWafBans', ['permission' => $projectScoped]);
+        Router::post('/swarm/waf/bans/release', 'App\Controller\ClusterController@swarmWafBanRelease', ['permission' => $wafOperation]);
         Router::get('/swarm/waf/events', 'App\Controller\ClusterController@swarmWafEvents', ['permission' => $projectScoped]);
+        Router::get('/swarm/waf/events/export', 'App\Controller\ClusterController@swarmWafEventsExport', ['permission' => $projectScoped]);
         Router::post('/swarm/waf/validate', 'App\Controller\ClusterController@swarmWafValidate', ['permission' => $projectScoped]);
         Router::put('/swarm/web-gateway', 'App\Controller\ClusterController@deploySwarmWebGateway'); // 部署或更新七层 Web 网关
         Router::delete('/swarm/web-gateway', 'App\Controller\ClusterController@removeSwarmWebGateway'); // 删除七层 Web 网关 Service

@@ -1,0 +1,40 @@
+CREATE TABLE IF NOT EXISTS `galaxy_waf_policy_revision` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `org_id` bigint unsigned NOT NULL,
+  `cluster_id` bigint unsigned NOT NULL,
+  `policy_id` bigint unsigned NOT NULL,
+  `settings` json NOT NULL,
+  `settings_hash` char(64) NOT NULL,
+  `actor_id` bigint unsigned NOT NULL DEFAULT 0,
+  `rollback_of` bigint unsigned NOT NULL DEFAULT 0,
+  `status` varchar(16) NOT NULL DEFAULT 'pending',
+  `error` text,
+  `created_at` int unsigned NOT NULL,
+  `completed_at` int unsigned NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `idx_waf_revision_scope` (`org_id`,`cluster_id`,`policy_id`,`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `galaxy_waf_alert` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `org_id` bigint unsigned NOT NULL,
+  `cluster_id` bigint unsigned NOT NULL,
+  `policy_id` bigint unsigned NOT NULL,
+  `kind` varchar(32) NOT NULL,
+  `status` varchar(16) NOT NULL DEFAULT 'open',
+  `severity` varchar(16) NOT NULL DEFAULT 'warning',
+  `title` varchar(255) NOT NULL,
+  `message` text,
+  `context` json NOT NULL,
+  `occurrences` int unsigned NOT NULL DEFAULT 1,
+  `first_seen_at` int unsigned NOT NULL,
+  `last_seen_at` int unsigned NOT NULL,
+  `resolved_at` int unsigned NOT NULL DEFAULT 0,
+  `notified_at` int unsigned NOT NULL DEFAULT 0,
+  `acknowledged_at` int unsigned NOT NULL DEFAULT 0,
+  `acknowledged_by` bigint unsigned NOT NULL DEFAULT 0,
+  `notification_error` text,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_waf_alert_condition` (`policy_id`,`kind`),
+  KEY `idx_waf_alert_scope` (`org_id`,`cluster_id`,`status`,`last_seen_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

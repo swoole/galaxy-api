@@ -19,7 +19,10 @@ final class WafRuntimeService
         private SwarmApiClient $docker,
         private SwarmContainerExecService $exec,
         private WafPolicyConfig $policies,
-        private WafConfigRenderer $renderer
+        private WafConfigRenderer $renderer,
+        private WafRetirementService $retirement,
+        private WafRuntimeConfigRegistry $controls,
+        private WafGatewayAuth $gatewayAuth
     ) {}
 
     public function prepare(Cluster $cluster, ClusterWebGateway $gateway, iterable $vhosts, iterable $projects): array
@@ -49,6 +52,11 @@ final class WafRuntimeService
             if (! preg_match('#^[0-9a-fA-F:./]+$#D', $subnet) || ! str_contains($subnet, '/')) {
                 throw new AppException(409, '无法确定网关 Overlay 子网，拒绝信任未知代理');
             }
+            if ($this->controls->initialized()) {
+                $services = $api->request($client, 'GET', '/services', ['query' => ['filters' => json_encode(['label' => [
+                    'com.codegalaxy.component=waf', 'com.codegalaxy.org.id=' . $cluster->org_id, 'com.codegalaxy.cluster.id=' . $cluster->id]])]]);
+                $this->controls->pruneUnreferenced($cluster, $services);
+            }
             $result = [];
             foreach ($active as $key => [$policy, $route]) {
                 $target = $policy->route_source === 'project'
@@ -61,8 +69,11 @@ final class WafRuntimeService
                 if (! in_array($scheme, ['http', 'https'], true)) throw new AppException(422, 'WAF 仅支持 HTTP / HTTPS 回源');
                 $host = str_contains($target, ':') ? '[' . $target . ']' : $target;
                 $p = $this->policies->normalize((array) $policy->settings);
-                $files = $this->renderer->render($p, sprintf('%s://%s:%d', $scheme, $host, $route->target_port), (bool) $route->pass_host_header, $subnet);
+                $control = $this->controls->prepare($policy, $p);
+                $gatewayToken = $this->gatewayAuth->credential($policy);
+                $files = $this->renderer->render($p, sprintf('%s://%s:%d', $scheme, $host, $route->target_port), (bool) $route->pass_host_header, $subnet, $control, $gatewayToken);
                 $env = $this->renderer->environment($p);
+                if ($control !== []) $env[] = 'GALAXY_WAF_CONTROL_CONFIG=' . $control['config_hash'];
                 $image = (string) config('waf.image');
                 $hash = substr(hash('sha256', json_encode([$files, $env, $image, $gateway->network_id], JSON_THROW_ON_ERROR)), 0, 16);
                 $name = sprintf('galaxy-waf-%d-%s-%d-%s', $cluster->id, $policy->route_source, $route->id, $hash);
@@ -76,6 +87,7 @@ final class WafRuntimeService
                     $serviceId = (string) $service['ID'];
                 }
                 if ($serviceId === '') {
+                    $this->assertGenerationCapacity($client, $api, $cluster, (int) $policy->id);
                     $configs = [];
                     foreach ($files as $file => $content) {
                         $configName = $name . '-' . str_replace('.', '-', $file);
@@ -121,8 +133,12 @@ final class WafRuntimeService
                 // The HTTP listener starts only after Nginx parses the full CRS configuration.
                 $health = $this->exec->executeService($cluster, $serviceId, ['curl', '-fsS', '--retry', '15', '--retry-connrefused', '--retry-delay', '1', 'http://127.0.0.1:8080/__galaxy_waf_health']);
                 if (($health['exit_code'] ?? -1) !== 0) throw new AppException(502, 'WAF 检测引擎未就绪，保留此前网关配置');
+                if ($control !== []) {
+                    $health = $this->exec->executeService($cluster, $serviceId, ['curl', '-fsS', '--connect-timeout', '2', '--max-time', '5', 'http://127.0.0.1:8080/__galaxy_waf_control_health']);
+                    if (($health['exit_code'] ?? -1) !== 0) throw new AppException(502, '动态防护检查服务不可用，保留此前网关配置');
+                }
                 $result[$key] = ['url' => 'http://' . $name . ':8080', 'service_id' => $serviceId,
-                    'service_name' => $name, 'policy_id' => $policy->id, 'mode' => $p['mode']];
+                    'service_name' => $name, 'policy_id' => $policy->id, 'mode' => $p['mode'], 'gateway_token' => $gatewayToken];
             }
             return $result;
         }, 90);
@@ -131,14 +147,18 @@ final class WafRuntimeService
     public function commit(Cluster $cluster, array $active): void
     {
         if (! config('waf.enabled', false)) return;
+        $this->gatewayAuth->prune($cluster);
         foreach ($active as $runtime) {
+            $this->retirement->cancel($cluster, (int) $runtime['policy_id'], $runtime['service_id']);
             WafPolicy::where('id', $runtime['policy_id'])->where('org_id', $cluster->org_id)->update([
                 'service_id' => $runtime['service_id'], 'service_name' => $runtime['service_name'],
                 'applied_mode' => $runtime['mode'],
                 'status' => 'synced', 'error' => null, 'synced_at' => time(),
             ]);
         }
+        $policyIds = [];
         foreach (WafPolicy::where('org_id', $cluster->org_id)->where('cluster_id', $cluster->id)->get() as $policy) {
+            $policyIds[] = (int) $policy->id;
             if (isset($active[$policy->route_source . ':' . $policy->route_id])) continue;
             $policy->service_id = '';
             $policy->service_name = '';
@@ -149,10 +169,11 @@ final class WafRuntimeService
         }
         // Once the gateway generation has switched, only the new services can receive
         // new traffic. Docker grants old tasks a grace period for in-flight requests.
-        $this->docker->withCluster($cluster, function (Client $client, SwarmApiClient $api) use ($cluster, $active): void {
+        $this->docker->withCluster($cluster, function (Client $client, SwarmApiClient $api) use ($cluster, $active, $policyIds): void {
             $filters = ['label' => ['com.codegalaxy.component=waf', 'com.codegalaxy.org.id=' . $cluster->org_id,
                 'com.codegalaxy.cluster.id=' . $cluster->id]];
             $keep = array_column($active, 'service_name');
+            $retiring = [];
             $services = $api->request($client, 'GET', '/services', ['query' => ['filters' => json_encode($filters, JSON_THROW_ON_ERROR)]]);
             foreach ($services as $service) {
                 $labels = $service['Spec']['Labels'] ?? [];
@@ -160,12 +181,17 @@ final class WafRuntimeService
                     || (int) ($labels['com.codegalaxy.org.id'] ?? 0) !== (int) $cluster->org_id
                     || (int) ($labels['com.codegalaxy.cluster.id'] ?? 0) !== (int) $cluster->id
                     || in_array($service['Spec']['Name'] ?? '', $keep, true)) continue;
-                $api->request($client, 'DELETE', '/services/' . rawurlencode((string) $service['ID']));
+                if (config('waf.collector_enabled', false) && in_array((int) ($labels['com.codegalaxy.waf.policy'] ?? 0), $policyIds, true)) {
+                    $this->retirement->register($cluster, $service);
+                    $retiring[] = $service['Spec']['Name'];
+                } else {
+                    $api->request($client, 'DELETE', '/services/' . rawurlencode((string) $service['ID']));
+                }
             }
             $configs = $api->request($client, 'GET', '/configs', ['query' => ['filters' => json_encode($filters, JSON_THROW_ON_ERROR)]]);
             foreach ($configs as $item) {
                 $name = (string) ($item['Spec']['Name'] ?? '');
-                foreach ($keep as $serviceName) {
+                foreach (array_merge($keep, $retiring) as $serviceName) {
                     if (str_starts_with($name, $serviceName . '-')) continue 2;
                 }
                 // Docker may still hold a retiring task's Config. Retry on the next sync.
@@ -198,6 +224,23 @@ final class WafRuntimeService
     {
         foreach ($expected as $key => $value) {
             if (($actual[$key] ?? null) !== $value) throw new AppException(409, 'WAF 资源名称被其他资源占用，拒绝覆盖');
+        }
+    }
+
+    private function assertGenerationCapacity(Client $client, SwarmApiClient $api, Cluster $cluster, int $policyId): void
+    {
+        $labels = ['com.codegalaxy.component=waf', 'com.codegalaxy.org.id=' . $cluster->org_id, 'com.codegalaxy.cluster.id=' . $cluster->id];
+        $services = $api->request($client, 'GET', '/services', ['query' => ['filters' => json_encode(['label' => $labels])]]);
+        $owned = array_filter($services, static function ($service) use ($cluster): bool {
+            $actual = $service['Spec']['Labels'] ?? [];
+            return ($actual['com.codegalaxy.component'] ?? '') === 'waf'
+                && (int) ($actual['com.codegalaxy.org.id'] ?? 0) === (int) $cluster->org_id
+                && (int) ($actual['com.codegalaxy.cluster.id'] ?? 0) === (int) $cluster->id;
+        });
+        $samePolicy = array_filter($owned, static fn ($service) => (int) ($service['Spec']['Labels']['com.codegalaxy.waf.policy'] ?? 0) === $policyId);
+        if (count($owned) >= max(1, (int) config('waf.max_generations', 24))
+            || count($samePolicy) >= max(1, (int) config('waf.max_policy_generations', 3))) {
+            throw new AppException(409, '旧 WAF 实例正在等待补采或回收，暂缓创建新实例；请检查采集状态后重试');
         }
     }
 }

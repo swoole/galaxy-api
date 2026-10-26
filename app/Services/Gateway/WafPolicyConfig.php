@@ -21,10 +21,23 @@ final class WafPolicyConfig
             'cc_enabled' => false, 'cc_rate' => 120, 'cc_burst' => 20,
             'path_limits' => [],
             'ip_allowlist' => [], 'ip_denylist' => [], 'excluded_paths' => [],
+            'ip_bans' => [],
             'allowed_methods' => ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
             'rule_exclusions' => [],
             'excluded_rule_ids' => [], 'blocked_extensions' => ['php', 'phtml', 'jsp', 'asp', 'aspx'],
             'sensitive_paths' => true, 'custom_rules' => [],
+            'auto_ban' => ['enabled' => false, 'window_seconds' => 300, 'attack_enabled' => true,
+                'attack_threshold' => 20, 'not_found_enabled' => false, 'not_found_threshold' => 60,
+                'duration_seconds' => 600, 'excluded_paths' => []],
+            'browser' => ['enabled' => false, 'type' => 'javascript', 'difficulty' => 16,
+                'challenge_seconds' => 180, 'clearance_seconds' => 3600, 'non_browser' => 'block',
+                'excluded_paths' => [], 'excluded_prefixes' => []],
+            'geo' => ['enabled' => false, 'source' => 'dbip-country', 'mode' => 'deny', 'countries' => [], 'unknown' => 'allow', 'unavailable' => 'block'],
+            'intelligence' => ['enabled' => false, 'sources' => [], 'unavailable' => 'block'],
+            'response' => ['enabled' => false, 'limit' => 65536, 'types' => ['private_key', 'aws_key', 'stack_trace', 'php_source'], 'excluded_paths' => []],
+            'alerts' => ['enabled' => false, 'attack_threshold' => 50, 'window_seconds' => 300,
+                'failure_threshold' => 2, 'cooldown_seconds' => 1800, 'notify_recovery' => true,
+                'channels' => ['notify'], 'actions' => ['block', 'monitor']],
         ];
     }
 
@@ -46,6 +59,12 @@ final class WafPolicyConfig
     public function normalize(array $input): array
     {
         $p = array_replace($this->defaults(), $input);
+        $p['alerts'] = $this->alerts($p['alerts']);
+        $p['response'] = $this->response($p['response']);
+        $p['auto_ban'] = $this->autoBan($p['auto_ban']);
+        $p['browser'] = $this->browser($p['browser']);
+        $p['geo'] = $this->network($p['geo'], 'geo');
+        $p['intelligence'] = $this->network($p['intelligence'], 'intelligence');
         if (! in_array($p['mode'], ['off', 'monitor', 'block'], true)) {
             $this->invalid('防护模式无效');
         }
@@ -63,7 +82,7 @@ final class WafPolicyConfig
             $p[$key] = (bool) $p[$key];
         }
         foreach (['categories', 'ip_allowlist', 'ip_denylist', 'excluded_paths',
-            'excluded_rule_ids', 'blocked_extensions', 'custom_rules', 'allowed_methods', 'rule_exclusions', 'path_limits'] as $key) {
+            'excluded_rule_ids', 'blocked_extensions', 'custom_rules', 'allowed_methods', 'rule_exclusions', 'path_limits', 'ip_bans'] as $key) {
             if (! is_array($p[$key]) || ! array_is_list($p[$key]) || count($p[$key]) > 100) {
                 $this->invalid($key . ' 必须为列表，最多 100 项');
             }
@@ -87,15 +106,21 @@ final class WafPolicyConfig
         }
         foreach (['ip_allowlist', 'ip_denylist'] as $key) {
             foreach ($p[$key] as $cidr) {
-                if (! is_string($cidr)) $this->invalid('IP 地址无效');
-                $parts = explode('/', $cidr);
-                if (count($parts) > 2 || filter_var($parts[0], FILTER_VALIDATE_IP) === false
-                    || (isset($parts[1]) && (! ctype_digit($parts[1])
-                        || (int) $parts[1] > (str_contains($parts[0], ':') ? 128 : 32)))) {
-                    $this->invalid('请输入有效 IPv4 / IPv6 或 CIDR：' . $cidr);
-                }
+                $this->ip($cidr);
             }
         }
+        foreach ($p['ip_bans'] as &$ban) {
+            if (! is_array($ban)) $this->invalid('临时封禁格式无效');
+            $this->ip($ban['ip'] ?? null);
+            $expires = $ban['expires_at'] ?? null;
+            if (filter_var($expires, FILTER_VALIDATE_INT) === false || $expires < 1 || $expires > time() + 86400 * 30) {
+                $this->invalid('封禁到期时间须为秒级时间戳，且不得超过未来 30 天');
+            }
+            $reason = $ban['reason'] ?? '';
+            if (! is_string($reason) || mb_strlen($reason) > 200 || preg_match('/[\x00-\x1f\x7f]/', $reason)) $this->invalid('封禁备注最多 200 字且不含控制字符');
+            $ban = ['ip' => $ban['ip'], 'expires_at' => (int) $expires, 'reason' => $reason];
+        }
+        unset($ban);
         foreach ($p['excluded_paths'] as $path) {
             $this->path($path);
         }
@@ -154,6 +179,102 @@ final class WafPolicyConfig
             if (! is_string($name) || ! preg_match('/^[a-zA-Z0-9_-]{1,64}$/D', $name)) $this->invalid('请求头或 Cookie 名称无效');
         }
         return ['field' => $condition['field'], 'operator' => $condition['operator'], 'value' => $condition['value'], 'name' => $name];
+    }
+
+    private function network(mixed $input, string $type): array
+    {
+        if (! is_array($input)) $this->invalid('地域或 IP 情报设置无效');
+        $settings = array_replace($this->defaults()[$type], $input);
+        if (! is_bool($settings['enabled']) || ! in_array($settings['unavailable'], ['block','skip'], true)) $this->invalid('地域或情报开关及故障处置无效');
+        $sources = $type === 'geo' ? [$settings['source']] : $settings['sources'];
+        if (! is_array($sources) || ! array_is_list($sources) || count($sources) > 8 || ($settings['enabled'] && $sources === [])) $this->invalid('IP 情报最多选择 8 个数据源，启用时不得为空');
+        foreach ($sources as $source) if (! is_string($source) || ! preg_match('/^[a-z][a-z0-9-]{1,63}$/D', $source)) $this->invalid('地域或情报数据源标识无效');
+        if ($type === 'geo') {
+            if (! in_array($settings['mode'], ['allow','deny'], true) || ! in_array($settings['unknown'], ['allow','block'], true)) $this->invalid('地域匹配方式或未知位置处置无效');
+            if (! is_array($settings['countries']) || ! array_is_list($settings['countries']) || count($settings['countries']) > 250 || ($settings['enabled'] && $settings['countries'] === [])) $this->invalid('启用地域控制时请选择国家/地区');
+            foreach ($settings['countries'] as $country) if (! WafCountries::valid($country)) $this->invalid('国家/地区代码无效');
+            $settings['countries'] = array_values(array_unique($settings['countries'])); sort($settings['countries']);
+        } else $settings['sources'] = array_values(array_unique($sources));
+        return array_intersect_key($settings, $this->defaults()[$type]);
+    }
+
+    private function browser(mixed $input): array
+    {
+        if (! is_array($input)) $this->invalid('浏览器验证设置无效');
+        $b = array_replace($this->defaults()['browser'], $input);
+        if (! is_bool($b['enabled']) || ! in_array($b['type'], ['javascript','captcha'], true)
+            || ! in_array($b['non_browser'], ['block','bypass'], true)) $this->invalid('浏览器验证类型或开关无效');
+        foreach (['difficulty' => [12,20], 'challenge_seconds' => [30,300], 'clearance_seconds' => [60,86400]] as $key => [$min,$max]) {
+            if (filter_var($b[$key], FILTER_VALIDATE_INT) === false || $b[$key] < $min || $b[$key] > $max) $this->invalid('浏览器验证参数超出范围：' . $key);
+            $b[$key] = (int) $b[$key];
+        }
+        foreach (['excluded_paths','excluded_prefixes'] as $key) {
+            if (! is_array($b[$key]) || ! array_is_list($b[$key]) || count($b[$key]) > 50) $this->invalid('浏览器验证排除路径最多各 50 项');
+            foreach ($b[$key] as $path) $this->path($path);
+            $b[$key] = array_values(array_unique($b[$key]));
+        }
+        return array_intersect_key($b, $this->defaults()['browser']);
+    }
+
+    private function autoBan(mixed $input): array
+    {
+        if (! is_array($input)) $this->invalid('自动封禁设置无效');
+        $a = array_replace($this->defaults()['auto_ban'], $input);
+        foreach (['enabled','attack_enabled','not_found_enabled'] as $key) if (! is_bool($a[$key])) $this->invalid('自动封禁开关必须为布尔值');
+        if ($a['enabled'] && ! $a['attack_enabled'] && ! $a['not_found_enabled']) $this->invalid('请至少选择一种自动封禁条件');
+        foreach (['window_seconds' => [60,3600], 'attack_threshold' => [2,10000],
+            'not_found_threshold' => [10,10000], 'duration_seconds' => [60,86400]] as $key => [$min,$max]) {
+            if (filter_var($a[$key], FILTER_VALIDATE_INT) === false || $a[$key] < $min || $a[$key] > $max) $this->invalid('自动封禁参数超出范围：' . $key);
+            $a[$key] = (int) $a[$key];
+        }
+        if (! is_array($a['excluded_paths']) || ! array_is_list($a['excluded_paths']) || count($a['excluded_paths']) > 100) $this->invalid('自动封禁排除路径最多 100 项');
+        foreach ($a['excluded_paths'] as $path) $this->path($path);
+        $a['excluded_paths'] = array_values(array_unique($a['excluded_paths']));
+        return array_intersect_key($a, $this->defaults()['auto_ban']);
+    }
+
+    private function response(mixed $input): array
+    {
+        if (! is_array($input)) $this->invalid('响应检测设置无效');
+        $r = array_replace($this->defaults()['response'], $input);
+        if (! is_bool($r['enabled'])) $this->invalid('响应检测开关必须为布尔值');
+        if (filter_var($r['limit'], FILTER_VALIDATE_INT) === false || $r['limit'] < 1024 || $r['limit'] > 262144) $this->invalid('响应检测上限为 1–256 KiB');
+        $r['limit'] = (int) $r['limit'];
+        if (! is_array($r['types']) || ! array_is_list($r['types']) || $r['types'] === [] || count($r['types']) > 4) $this->invalid('请选择至少一种响应检测类型');
+        foreach ($r['types'] as $type) if (! is_string($type) || ! isset(WafResponseInspection::TYPES[$type])) $this->invalid('响应检测类型无效');
+        $r['types'] = array_values(array_unique($r['types']));
+        if (! is_array($r['excluded_paths']) || ! array_is_list($r['excluded_paths']) || count($r['excluded_paths']) > 100) $this->invalid('响应检测排除路径最多 100 项');
+        foreach ($r['excluded_paths'] as $path) $this->path($path);
+        $r['excluded_paths'] = array_values(array_unique($r['excluded_paths']));
+        return array_intersect_key($r, $this->defaults()['response']);
+    }
+
+    private function alerts(mixed $input): array
+    {
+        if (! is_array($input)) $this->invalid('告警设置无效');
+        $a = array_replace($this->defaults()['alerts'], $input);
+        foreach (['enabled', 'notify_recovery'] as $key) if (! is_bool($a[$key])) $this->invalid('告警开关必须为布尔值');
+        foreach (['attack_threshold' => [1, 100000], 'window_seconds' => [60, 3600],
+            'failure_threshold' => [1, 20], 'cooldown_seconds' => [300, 86400]] as $key => [$min, $max]) {
+            if (filter_var($a[$key], FILTER_VALIDATE_INT) === false || $a[$key] < $min || $a[$key] > $max) $this->invalid('告警参数超出范围：' . $key);
+            $a[$key] = (int) $a[$key];
+        }
+        foreach (['channels' => ['notify', 'email', 'browser'], 'actions' => ['block', 'monitor', 'detected', 'challenge']] as $key => $allowed) {
+            if (! is_array($a[$key]) || ! array_is_list($a[$key]) || $a[$key] === [] || count($a[$key]) > 3) $this->invalid('告警渠道或动作列表无效');
+            foreach ($a[$key] as $value) if (! in_array($value, $allowed, true)) $this->invalid('不支持的告警渠道或动作');
+            $a[$key] = array_values(array_unique($a[$key]));
+        }
+        return array_intersect_key($a, $this->defaults()['alerts']);
+    }
+
+    private function ip(mixed $cidr): void
+    {
+        if (! is_string($cidr)) $this->invalid('IP 地址无效');
+        $parts = explode('/', $cidr);
+        if (count($parts) > 2 || filter_var($parts[0], FILTER_VALIDATE_IP) === false
+            || (isset($parts[1]) && (! ctype_digit($parts[1]) || (int) $parts[1] > (str_contains($parts[0], ':') ? 128 : 32)))) {
+            $this->invalid('请输入有效 IPv4 / IPv6 或 CIDR：' . $cidr);
+        }
     }
 
     private function literal(mixed $value, int $max): void

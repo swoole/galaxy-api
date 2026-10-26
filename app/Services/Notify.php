@@ -53,6 +53,12 @@ class Notify
      */
     public function send(array $uids, string $scene, array $params = [], array $channels = [])
     {
+        $this->sendTracked($uids, $scene, $params, $channels);
+    }
+
+    /** Preserve channel outcomes for monitored deliveries without changing existing callers. */
+    public function sendTracked(array $uids, string $scene, array $params = [], array $channels = []): array
+    {
         if (empty($this->scenes[$scene])) {
             throw new AppException(404, '通知场景不存在');
         }
@@ -61,6 +67,8 @@ class Notify
             ->select('id', 'email')
             ->get();
         // TODO 根据用户偏好设置不发送某些渠道的通知
+        $outcomes = [];
+        foreach ($channels as $channel) $outcomes[$channel] = ['sent' => false, 'error' => '通知渠道未配置或未启用'];
         foreach ($this->scenes[$scene] as $channel => $config) {
             // 没有该通知渠道则跳过，说明未支持
             if (!isset($this->channels[$channel])) {
@@ -72,7 +80,9 @@ class Notify
             }
             try {
                 $this->channels[$channel]->send($users, $config, $params, $scene);
+                $outcomes[$channel] = ['sent' => true, 'error' => ''];
             } catch (Throwable $e) {
+                $outcomes[$channel] = ['sent' => false, 'error' => mb_substr($e->getMessage(), 0, 1000)];
                 $this->logger->warning('catch unknown exception on send', [
                     'params' => [
                         'uids' => $uids,
@@ -84,5 +94,6 @@ class Notify
                 ]);
             }
         }
+        return $outcomes;
     }
 }

@@ -1904,3 +1904,136 @@ CREATE TABLE IF NOT EXISTS `galaxy_waf_event` (
   KEY `idx_waf_event_time` (`org_id`,`cluster_id`,`occurred_at`,`id`),
   KEY `idx_waf_policy_time` (`policy_id`,`occurred_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `galaxy_waf_policy_revision` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `org_id` bigint unsigned NOT NULL,
+  `cluster_id` bigint unsigned NOT NULL,
+  `policy_id` bigint unsigned NOT NULL,
+  `settings` json NOT NULL,
+  `settings_hash` char(64) NOT NULL,
+  `actor_id` bigint unsigned NOT NULL DEFAULT 0,
+  `rollback_of` bigint unsigned NOT NULL DEFAULT 0,
+  `status` varchar(16) NOT NULL DEFAULT 'pending',
+  `error` text,
+  `created_at` int unsigned NOT NULL,
+  `completed_at` int unsigned NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `idx_waf_revision_scope` (`org_id`,`cluster_id`,`policy_id`,`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `galaxy_waf_alert` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `org_id` bigint unsigned NOT NULL,
+  `cluster_id` bigint unsigned NOT NULL,
+  `policy_id` bigint unsigned NOT NULL,
+  `kind` varchar(32) NOT NULL,
+  `status` varchar(16) NOT NULL DEFAULT 'open',
+  `severity` varchar(16) NOT NULL DEFAULT 'warning',
+  `title` varchar(255) NOT NULL,
+  `message` text,
+  `context` json NOT NULL,
+  `occurrences` int unsigned NOT NULL DEFAULT 1,
+  `first_seen_at` int unsigned NOT NULL,
+  `last_seen_at` int unsigned NOT NULL,
+  `resolved_at` int unsigned NOT NULL DEFAULT 0,
+  `notified_at` int unsigned NOT NULL DEFAULT 0,
+  `acknowledged_at` int unsigned NOT NULL DEFAULT 0,
+  `acknowledged_by` bigint unsigned NOT NULL DEFAULT 0,
+  `notification_error` text,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_waf_alert_condition` (`policy_id`,`kind`),
+  KEY `idx_waf_alert_scope` (`org_id`,`cluster_id`,`status`,`last_seen_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `galaxy_waf_runtime_config` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `org_id` bigint unsigned NOT NULL,
+  `cluster_id` bigint unsigned NOT NULL,
+  `policy_id` bigint unsigned NOT NULL,
+  `config_hash` char(64) NOT NULL,
+  `settings` json NOT NULL,
+  `created_at` int unsigned NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_waf_runtime_config` (`policy_id`,`config_hash`),
+  KEY `idx_waf_runtime_scope` (`org_id`,`cluster_id`,`policy_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `galaxy_waf_ban` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `org_id` bigint unsigned NOT NULL,
+  `cluster_id` bigint unsigned NOT NULL,
+  `policy_id` bigint unsigned NOT NULL,
+  `client_ip` varchar(45) NOT NULL,
+  `config_hash` char(64) NOT NULL,
+  `reason` varchar(32) NOT NULL,
+  `events_count` int unsigned NOT NULL,
+  `status` varchar(16) NOT NULL DEFAULT 'active',
+  `triggered_at` int unsigned NOT NULL,
+  `expires_at` int unsigned NOT NULL,
+  `released_at` int unsigned NOT NULL DEFAULT 0,
+  `released_by` bigint unsigned NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_waf_ban_ip` (`policy_id`,`client_ip`),
+  KEY `idx_waf_ban_scope` (`org_id`,`cluster_id`,`policy_id`,`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `galaxy_waf_signal` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `org_id` bigint unsigned NOT NULL,
+  `cluster_id` bigint unsigned NOT NULL,
+  `policy_id` bigint unsigned NOT NULL,
+  `signal_key` char(64) NOT NULL,
+  `client_ip` varchar(45) NOT NULL,
+  `kind` varchar(16) NOT NULL,
+  `occurred_at` int unsigned NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_waf_signal` (`signal_key`),
+  KEY `idx_waf_signal_count` (`policy_id`,`client_ip`,`kind`,`occurred_at`),
+  KEY `idx_waf_signal_expiry` (`occurred_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `galaxy_waf_data_source` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `org_id` bigint unsigned NOT NULL,
+  `source_key` varchar(64) NOT NULL,
+  `provider` varchar(32) NOT NULL,
+  `kind` varchar(16) NOT NULL,
+  `title` varchar(100) NOT NULL,
+  `url` varchar(2048) NOT NULL DEFAULT '',
+  `license_url` varchar(2048) NOT NULL,
+  `attribution` varchar(255) NOT NULL,
+  `enabled` tinyint unsigned NOT NULL DEFAULT 1,
+  `refresh_interval` int unsigned NOT NULL DEFAULT 86400,
+  `max_age` int unsigned NOT NULL DEFAULT 259200,
+  `config_version` int unsigned NOT NULL DEFAULT 1,
+  `content_hash` char(64) NOT NULL DEFAULT '',
+  `version` varchar(96) NOT NULL DEFAULT '',
+  `published_at` int unsigned NOT NULL DEFAULT 0,
+  `validated_at` int unsigned NOT NULL DEFAULT 0,
+  `last_checked_at` int unsigned NOT NULL DEFAULT 0,
+  `next_check_at` int unsigned NOT NULL DEFAULT 0,
+  `updating_until` int unsigned NOT NULL DEFAULT 0,
+  `record_count` int unsigned NOT NULL DEFAULT 0,
+  `file_bytes` bigint unsigned NOT NULL DEFAULT 0,
+  `last_error` varchar(1000) NOT NULL DEFAULT '',
+  `created_by` bigint unsigned NOT NULL DEFAULT 0,
+  `updated_by` bigint unsigned NOT NULL DEFAULT 0,
+  `created_at` int unsigned NOT NULL,
+  `updated_at` int unsigned NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_waf_data_source` (`org_id`,`source_key`),
+  KEY `idx_waf_data_due` (`enabled`,`next_check_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `galaxy_waf_gateway_credential` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `org_id` bigint unsigned NOT NULL,
+  `cluster_id` bigint unsigned NOT NULL,
+  `policy_id` bigint unsigned NOT NULL,
+  `token` char(64) NOT NULL,
+  `created_at` int unsigned NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_waf_gateway_policy` (`policy_id`),
+  KEY `idx_waf_gateway_scope` (`org_id`,`cluster_id`,`policy_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -121,9 +121,20 @@ class SwarmApiClient
                 'Docker Manager API 返回 %d：%s',
                 $response->getStatusCode(),
                 is_array($data) ? ($data['message'] ?? $body) : ($body ?: 'unknown error')
-            ));
+            ), ['docker_status' => $response->getStatusCode()]);
         }
         return $body;
+    }
+
+    /** Docker applies tail before until; finite tails silently omit earlier time windows. */
+    public function requestLogWindow(Cluster $cluster, string $nodeId, string $containerId, array $query, int $maxBytes = 8388608): ?string
+    {
+        $query['tail'] = 'all';
+        $path = '/containers/' . rawurlencode($containerId) . '/logs?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+        $stream = $this->agentRelay->openStream('agent://' . (int) $cluster->id . '/' . rawurlencode($nodeId),
+            'GET', $path, ['Connection' => ['close']], '');
+        try { return (new DockerLogStreamReader())->read(fn ($timeout) => $stream->recv($timeout), $maxBytes, microtime(true) + 5); }
+        finally { $stream->close(); }
     }
 
     public function putArchive(Client $client, string $containerId, string $path, string $tar): void

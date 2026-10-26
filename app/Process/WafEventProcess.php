@@ -29,7 +29,7 @@ class WafEventProcess extends AbstractProcess
         while (ProcessManager::isRunning()) {
             try { $this->events->collect(); }
             catch (Throwable $e) { $this->logger->warning('WAF 事件采集：' . $e->getMessage()); }
-            Coroutine::sleep(30);
+            Coroutine::sleep(max(5, (int) config('waf.collector_interval', 5)));
         }
     }
 }

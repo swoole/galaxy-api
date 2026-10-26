@@ -13,6 +13,14 @@ return [
     // 通知渠道
     'channels' => explode(',', env('NOTIFY_CHANNELS', 'email,notify,browser')),
     'tpls' => [
+        'waf_alert' => [
+            UserNotify::CHANNEL_EMAIL => ['subject' => 'Galaxy WAF 安全告警', 'template' => 'waf_alert'],
+            UserNotify::CHANNEL_BROWSER => ['title' => 'WAF 安全状态', 'body' => '{{title}}：{{message}}', 'fields' => ['title', 'message']],
+            UserNotify::CHANNEL_NOTIFY => ['title' => 'WAF 安全状态',
+                'body' => '{{title}}<br>集群 #{{cluster_id}} / 策略 #{{policy_id}}<br>{{message}}',
+                'fields' => ['title', 'cluster_id', 'policy_id', 'message'],
+                'before_filter' => [\App\Services\Notify\Filter\WafAlert::class, 'beforeNotify']],
+        ],
         'build_complete' => [
             UserNotify::CHANNEL_EMAIL => [
                 'subject' => '镜像构建%s',
